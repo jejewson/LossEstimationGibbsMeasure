@@ -15,13 +15,13 @@ double MMD_RBF_vec_cpp_arma(const arma::vec& y, const arma::vec& u, const double
   int i;
   int k;
   for(i = 0; i<n; i++){
-    out1 += - arma::sum(arma::normpdf(y(i) - u, 0.0, gamma).col(0));
+    out1 += - arma::sum(arma::normpdf(y(i) - u, 0.0, sqrt(gamma)).col(0));
   }
   out1 = out1*2.0/(m);
   for(k = 0; k<m; k++){
     arma::vec l = regspace(0,m-1);
     arma::uvec ind = arma::find(l != k);
-    out2 += arma::sum(arma::normpdf(u(k) - u(ind), 0.0, gamma).col(0));
+    out2 += arma::sum(arma::normpdf(u(k) - u(ind), 0.0, sqrt(gamma)).col(0));
     }
   out2 = out2*1.0/(m*(m-1.0));
   return out1 + n*out2;
