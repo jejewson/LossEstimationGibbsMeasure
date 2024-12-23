@@ -1,0 +1,902 @@
+---
+title: "PDMPs for Intractbale Likelihood Models"
+author: "Jack Jewson"
+date: "7 May 2024"
+output: html_document
+---
+
+## Preamble {.tabset}
+
+### Working directory
+
++ Change this to be the directory that the stan files are saved in 
+
+```{r setwd, include=TRUE,echo=TRUE, eval=TRUE,cache=TRUE}
+
+my_dir <- "C:/Users/jjew0003/Documents/Monash_Yr1/PDMPs_IntractableLikelihood/"
+
+
+```
+
+### Packages
+
+Loading the required packages.
+
+```{r packages, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(actuar)
+library(metRology)
+library(LaplacesDemon)
+
+```
+
+### RCPP
+
+```{r RCPP, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(Rcpp)
+
+setwd(my_dir)
+
+sourceCpp("MMD_arma.cpp")
+```
+
+
+# Student Data - n = 100 {.tabset}
+
+## Data Sim 
+
+```{r data_sim_student_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+
+
+n <- 100
+
+mu <- 1
+sigma2 <- 2
+df <- 6
+
+y <- rt.scaled(n, df, mean = mu, sd = sqrt(sigma2))
+
+
+
+```
+
+## Prior
+
+```{r prior_n100, include=TRUE,echo=TRUE, eval = TRUE,  cache=TRUE}
+
+m_0 <- 0
+s_0 <- 5
+
+```
+
+
+## setup
+
+```{r student_generator_setup_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+
+gamma <- 1
+
+```
+
+## m = 5
+
+```{r student_generator_skeleton_m5_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+T_end <- 1000
+xi_0 <- 0
+theta_0 <- 1
+
+
+timer_MMD_Student_loc_m5.start <- Sys.time()
+skeleton_Student_loc_IntractLik_m5 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Student_loc_m5.end <- Sys.time()
+
+sample_Student_loc_IntractLik_m5 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m5$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r student_generator_skeleton_m5_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Student_loc_m5.end, timer_MMD_Student_loc_m5.start, units = "secs")
+
+
+skeleton_Student_loc_IntractLik_m5$mean_alpha
+skeleton_Student_loc_IntractLik_m5$max_alpha
+
+plot(density(sample_Student_loc_IntractLik_m5[,1]), ylab = "Density", xlab = "mu", lwd = 3)
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+ESS(sample_Student_loc_IntractLik_m5[,1])
+```
+
+## m = 20
+
+```{r student_generator_skeleton_m20_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+T_end <- 1000
+xi_0 <- 0
+theta_0 <- 1
+
+
+timer_MMD_Student_loc_m20.start <- Sys.time()
+skeleton_Student_loc_IntractLik_m20 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Student_loc_m20.end <- Sys.time()
+
+sample_Student_loc_IntractLik_m20 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m20$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m20$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m20$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r student_generator_skeleton_m20_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Student_loc_m20.end, timer_MMD_Student_loc_m20.start, units = "secs")
+
+skeleton_Student_loc_IntractLik_m20$mean_alpha
+skeleton_Student_loc_IntractLik_m20$max_alpha
+
+plot(density(sample_Student_loc_IntractLik_m5[,1]), ylab = "Density", xlab = "mu", lwd = 3)
+lines(density(sample_Student_loc_IntractLik_m20[,1]), lty = 2, col = "darkgray", lwd = 3)
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+ESS(sample_Student_loc_IntractLik_m20[,1])
+```
+
+## m = 100
+
+```{r student_generator_skeleton_m100_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 100
+
+T_end <- 1000
+xi_0 <- 0
+theta_0 <- 1
+
+
+timer_MMD_Student_loc_m100.start <- Sys.time()
+skeleton_Student_loc_IntractLik_m100 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Student_loc_m100.end <- Sys.time()
+
+sample_Student_loc_IntractLik_m100 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m100$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m100$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m100$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r student_generator_skeleton_m100_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Student_loc_m100.end, timer_MMD_Student_loc_m100.start, units = "secs")
+
+skeleton_Student_loc_IntractLik_m100$mean_alpha
+skeleton_Student_loc_IntractLik_m100$max_alpha
+
+plot(density(sample_Student_loc_IntractLik_m5[,1]), ylab = "Density", xlab = "mu", lwd = 3)
+lines(density(sample_Student_loc_IntractLik_m20[,1]), lty = 2, col = "darkgray", lwd = 3)
+lines(density(sample_Student_loc_IntractLik_m100[,1]), lty = 3, col = "lightgray", lwd = 3)
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+ESS(sample_Student_loc_IntractLik_m100[,1])
+```
+
+
+```{r student_generator_skeleton_m5_n100_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+plot(density(sample_Student_loc_IntractLik_m5[,1]), ylab = "Density", xlab = "$\\mu$", lwd = 5, main = paste("Student's-t location: $n$ = ", n), ylim = c(0, 2))
+lines(density(sample_Student_loc_IntractLik_m20[,1]), lty = 2, col = "darkgray", lwd = 3)
+lines(density(sample_Student_loc_IntractLik_m100[,1]), lty = 3, col = "lightgray", lwd = 3)
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+legend("topright", c("$m$ = 5", "$m$ = 20", "$m$ = 100", "True"), col = c("black", "darkgrey", "lightgrey", "red"), lwd = rep(3, 4), lty = c(1, 2, 3, 2), bty = "n")
+
+
+
+```
+
+# Student - n = 100 - Repeated MCMC {.tabset}
+
+## Data Sim 
+
+```{r data_sim_student_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+
+
+n <- 100
+
+mu <- 1
+sigma2 <- 2
+df <- 6
+
+y <- rt.scaled(n, df, mean = mu, sd = sqrt(sigma2))
+
+
+
+```
+
+## Prior
+
+```{r prior_n100_rep, include=TRUE,echo=TRUE, eval = TRUE,  cache=TRUE}
+
+m_0 <- 0
+s_0 <- 5
+
+```
+
+
+## setup
+
+```{r student_generator_setup_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+
+gamma <- 1
+
+
+
+N_rep <- 25
+
+```
+
+## m = 5
+
+```{r Student_loc_skeleton_m5_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+T_end <- 1000
+
+set.seed(1)
+
+sample_Student_loc_IntractLik_m5 <- list()
+timer_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+max_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+mean_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+ESS_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(1, 0, 1)
+  theta_0 <- sample(c(-1, 1), 1)
+
+  timer_MMD_Student_loc_m5.start <- Sys.time()
+  skeleton_Student_loc_IntractLik_m5 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+  timer_MMD_Student_loc_m5.end <- Sys.time()
+  
+  timer_Student_loc_IntractLik_m5[j] <- difftime(timer_MMD_Student_loc_m5.end, timer_MMD_Student_loc_m5.start, units = "secs")
+  
+  max_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$max_alpha
+  mean_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$mean_alpha
+
+  sample_Student_loc_IntractLik_m5[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m5$skeleton_Theta, N = 5000)
+  
+  ESS_Student_loc_IntractLik_m5[j] <- ESS(sample_Student_loc_IntractLik_m5[[j]][,1])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m5_n100_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_Student_loc_IntractLik_m5)
+mean(ESS_Student_loc_IntractLik_m5)
+
+mean(mean_alpha_Student_loc_IntractLik_m5)
+max(max_alpha_Student_loc_IntractLik_m5)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(-0.75, 1.75), ylim = c(0, 1.75))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+
+
+```
+
+```{r Student_loc_skeleton_m5_n100_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(-0.75, 1.75), ylim = c(0, 1.75))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+## m = 20
+
+```{r Student_loc_skeleton_m20_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+T_end <- 1000
+
+set.seed(1)
+
+sample_Student_loc_IntractLik_m5 <- list()
+timer_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+max_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+mean_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+ESS_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(1, 0, 1)
+  theta_0 <- sample(c(-1, 1), 1)
+
+  timer_MMD_Student_loc_m5.start <- Sys.time()
+  skeleton_Student_loc_IntractLik_m5 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+  timer_MMD_Student_loc_m5.end <- Sys.time()
+  
+  timer_Student_loc_IntractLik_m5[j] <- difftime(timer_MMD_Student_loc_m5.end, timer_MMD_Student_loc_m5.start, units = "secs")
+  
+  max_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$max_alpha
+  mean_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$mean_alpha
+
+  sample_Student_loc_IntractLik_m5[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m5$skeleton_Theta, N = 5000)
+  
+  ESS_Student_loc_IntractLik_m5[j] <- ESS(sample_Student_loc_IntractLik_m5[[j]][,1])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m20_n100_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_Student_loc_IntractLik_m5)
+mean(ESS_Student_loc_IntractLik_m5)
+
+mean(mean_alpha_Student_loc_IntractLik_m5)
+max(max_alpha_Student_loc_IntractLik_m5)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(-0.75, 1.75), ylim = c(0, 1.75))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+
+
+```
+
+```{r Student_loc_skeleton_m20_n100_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(-0.75, 1.75), ylim = c(0, 1.75))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+## m = 100
+
+```{r Student_loc_skeleton_m100_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 100
+
+T_end <- 1000
+
+set.seed(1)
+
+sample_Student_loc_IntractLik_m5 <- list()
+timer_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+max_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+mean_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+ESS_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(1, 0, 1)
+  theta_0 <- sample(c(-1, 1), 1)
+
+  timer_MMD_Student_loc_m5.start <- Sys.time()
+  skeleton_Student_loc_IntractLik_m5 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+  timer_MMD_Student_loc_m5.end <- Sys.time()
+  
+  timer_Student_loc_IntractLik_m5[j] <- difftime(timer_MMD_Student_loc_m5.end, timer_MMD_Student_loc_m5.start, units = "secs")
+  
+  max_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$max_alpha
+  mean_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$mean_alpha
+
+  sample_Student_loc_IntractLik_m5[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m5$skeleton_Theta, N = 5000)
+  
+  ESS_Student_loc_IntractLik_m5[j] <- ESS(sample_Student_loc_IntractLik_m5[[j]][,1])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m100_n100_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_Student_loc_IntractLik_m5)
+mean(ESS_Student_loc_IntractLik_m5)
+
+mean(mean_alpha_Student_loc_IntractLik_m5)
+max(max_alpha_Student_loc_IntractLik_m5)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(-0.75, 1.75), ylim = c(0, 1.75))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+
+
+```
+
+```{r Student_loc_skeleton_m100_n100_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(-0.75, 1.75), ylim = c(0, 1.75))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+
+# Student Data - n = 1000 {.tabset}
+
+## Data Sim 
+
+```{r data_sim_student_n1000, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+
+
+n <- 1000
+
+mu <- 1
+sigma2 <- 2
+df <- 6
+
+y <- rt.scaled(n, df, mean = mu, sd = sqrt(sigma2))
+
+
+
+```
+
+## Prior
+
+```{r prior_n1000, include=TRUE,echo=TRUE, eval = TRUE,  cache=TRUE}
+
+m_0 <- 0
+s_0 <- 5
+
+```
+
+
+## setup
+
+```{r student_generator_setup_n1000, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+
+gamma <- 1
+
+
+
+```
+
+## m = 5
+
+```{r student_generator_skeleton_m5_n1000, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+T_end <- 1000
+xi_0 <- 0
+theta_0 <- 1
+
+
+timer_MMD_Student_loc_m5.start <- Sys.time()
+skeleton_Student_loc_IntractLik_m5 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Student_loc_m5.end <- Sys.time()
+
+sample_Student_loc_IntractLik_m5 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m5$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r student_generator_skeleton_m5_n1000_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Student_loc_m5.end, timer_MMD_Student_loc_m5.start, units = "secs")
+
+
+skeleton_Student_loc_IntractLik_m5$mean_alpha
+skeleton_Student_loc_IntractLik_m5$max_alpha
+
+plot(density(sample_Student_loc_IntractLik_m5[,1]), ylab = "Density", xlab = "mu", lwd = 3)
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+ESS(sample_Student_loc_IntractLik_m5[,1])
+```
+
+## m = 20
+
+```{r student_generator_skeleton_m20_n1000, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+T_end <- 1000
+xi_0 <- 0
+theta_0 <- 1
+
+
+timer_MMD_Student_loc_m20.start <- Sys.time()
+skeleton_Student_loc_IntractLik_m20 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Student_loc_m20.end <- Sys.time()
+
+sample_Student_loc_IntractLik_m20 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m20$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m20$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m20$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r student_generator_skeleton_m20_n1000_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Student_loc_m20.end, timer_MMD_Student_loc_m20.start, units = "secs")
+
+skeleton_Student_loc_IntractLik_m20$mean_alpha
+skeleton_Student_loc_IntractLik_m20$max_alpha
+
+plot(density(sample_Student_loc_IntractLik_m5[,1]), ylab = "Density", xlab = "mu", lwd = 3)
+lines(density(sample_Student_loc_IntractLik_m20[,1]), lty = 2, col = "darkgray", lwd = 3)
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+ESS(sample_Student_loc_IntractLik_m20[,1])
+```
+
+## m = 100
+
+```{r student_generator_skeleton_m100_n1000, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 100
+
+T_end <- 1000
+xi_0 <- 0
+theta_0 <- 1
+
+
+timer_MMD_Student_loc_m100.start <- Sys.time()
+skeleton_Student_loc_IntractLik_m100 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Student_loc_m100.end <- Sys.time()
+
+sample_Student_loc_IntractLik_m100 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m100$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m100$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m100$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r student_generator_skeleton_m100_n1000_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Student_loc_m100.end, timer_MMD_Student_loc_m100.start, units = "secs")
+
+skeleton_Student_loc_IntractLik_m100$mean_alpha
+skeleton_Student_loc_IntractLik_m100$max_alpha
+
+plot(density(sample_Student_loc_IntractLik_m5[,1]), ylab = "Density", xlab = "mu", lwd = 3)
+lines(density(sample_Student_loc_IntractLik_m20[,1]), lty = 2, col = "darkgray", lwd = 3)
+lines(density(sample_Student_loc_IntractLik_m100[,1]), lty = 3, col = "lightgray", lwd = 3)
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+ESS(sample_Student_loc_IntractLik_m100[,1])
+```
+
+
+```{r student_generator_skeleton_m5_n1000_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+plot(density(sample_Student_loc_IntractLik_m5[,1]), ylab = "Density", xlab = "$\\mu$", lwd = 5, main = paste("Student's-t location: $n$ = ", n), xlim = c(0.6, 1.4), ylim = c(0, 5.5))
+lines(density(sample_Student_loc_IntractLik_m20[,1]), lty = 2, col = "darkgray", lwd = 3)
+lines(density(sample_Student_loc_IntractLik_m100[,1]), lty = 3, col = "lightgray", lwd = 3)
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+#legend("topright", c("$m$ = 5", "$m$ = 20", "$m$ = 100", "True"), col = c("black", "darkgrey", "lightgrey", "red"), lwd = rep(3, 4), lty = c(1, 2, 3, 2), bty = "n")
+
+
+
+```
+
+# Student Data - n = 1000 - Repeated MCMC {.tabset}
+
+## Data Sim 
+
+```{r data_sim_student_n1000_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+
+
+n <- 1000
+
+mu <- 1
+sigma2 <- 2
+df <- 6
+
+y <- rt.scaled(n, df, mean = mu, sd = sqrt(sigma2))
+
+
+
+```
+
+## Prior
+
+```{r prior_n1000_rep, include=TRUE,echo=TRUE, eval = TRUE,  cache=TRUE}
+
+m_0 <- 0
+s_0 <- 5
+
+```
+
+
+## setup
+
+```{r student_generator_setup_n1000_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+
+gamma <- 1
+
+
+
+N_rep <- 25
+
+```
+
+## m = 5
+
+```{r Student_loc_skeleton_m5_n1000_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+T_end <- 1000
+
+set.seed(1)
+
+sample_Student_loc_IntractLik_m5 <- list()
+timer_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+max_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+mean_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+ESS_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(1, 0, 1)
+  theta_0 <- sample(c(-1, 1), 1)
+
+  timer_MMD_Student_loc_m5.start <- Sys.time()
+  skeleton_Student_loc_IntractLik_m5 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+  timer_MMD_Student_loc_m5.end <- Sys.time()
+  
+  timer_Student_loc_IntractLik_m5[j] <- difftime(timer_MMD_Student_loc_m5.end, timer_MMD_Student_loc_m5.start, units = "secs")
+  
+  max_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$max_alpha
+  mean_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$mean_alpha
+
+  sample_Student_loc_IntractLik_m5[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m5$skeleton_Theta, N = 5000)
+  
+  ESS_Student_loc_IntractLik_m5[j] <- ESS(sample_Student_loc_IntractLik_m5[[j]][,1])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m5_n1000_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_Student_loc_IntractLik_m5)
+mean(ESS_Student_loc_IntractLik_m5)
+
+mean(mean_alpha_Student_loc_IntractLik_m5)
+max(max_alpha_Student_loc_IntractLik_m5)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(0.5, 1.5), ylim = c(0, 5.5))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+
+
+```
+
+```{r Student_loc_skeleton_m5_n1000_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(0.5, 1.5), ylim = c(0, 5.5))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+## m = 20
+
+```{r Student_loc_skeleton_m20_n1000_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+T_end <- 1000
+
+set.seed(1)
+
+sample_Student_loc_IntractLik_m5 <- list()
+timer_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+max_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+mean_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+ESS_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(1, 0, 1)
+  theta_0 <- sample(c(-1, 1), 1)
+
+  timer_MMD_Student_loc_m5.start <- Sys.time()
+  skeleton_Student_loc_IntractLik_m5 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+  timer_MMD_Student_loc_m5.end <- Sys.time()
+  
+  timer_Student_loc_IntractLik_m5[j] <- difftime(timer_MMD_Student_loc_m5.end, timer_MMD_Student_loc_m5.start, units = "secs")
+  
+  max_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$max_alpha
+  mean_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$mean_alpha
+
+  sample_Student_loc_IntractLik_m5[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m5$skeleton_Theta, N = 5000)
+  
+  ESS_Student_loc_IntractLik_m5[j] <- ESS(sample_Student_loc_IntractLik_m5[[j]][,1])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m20_n1000_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_Student_loc_IntractLik_m5)
+mean(ESS_Student_loc_IntractLik_m5)
+
+mean(mean_alpha_Student_loc_IntractLik_m5)
+max(max_alpha_Student_loc_IntractLik_m5)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(0.5, 1.5), ylim = c(0, 5.5))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+
+
+```
+
+```{r Student_loc_skeleton_m20_n1000_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(0.5, 1.5), ylim = c(0, 5.5))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+## m = 100
+
+```{r Student_loc_skeleton_m100_n1000_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 100
+
+T_end <- 1000
+
+set.seed(1)
+
+sample_Student_loc_IntractLik_m5 <- list()
+timer_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+max_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+mean_alpha_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+ESS_Student_loc_IntractLik_m5 <- rep(NA, N_rep)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(1, 0, 1)
+  theta_0 <- sample(c(-1, 1), 1)
+
+  timer_MMD_Student_loc_m5.start <- Sys.time()
+  skeleton_Student_loc_IntractLik_m5 <- ZigZag_MMD_RBF_Student_loc_cpp_arma(T_end, xi_0, theta_0, y, sigma2, df, m, gamma, m_0, s_0, w = sqrt(2*pi), N_skeleton = 100000)
+  timer_MMD_Student_loc_m5.end <- Sys.time()
+  
+  timer_Student_loc_IntractLik_m5[j] <- difftime(timer_MMD_Student_loc_m5.end, timer_MMD_Student_loc_m5.start, units = "secs")
+  
+  max_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$max_alpha
+  mean_alpha_Student_loc_IntractLik_m5[j] <- skeleton_Student_loc_IntractLik_m5$mean_alpha
+
+  sample_Student_loc_IntractLik_m5[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Student_loc_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Student_loc_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Student_loc_IntractLik_m5$skeleton_Theta, N = 5000)
+  
+  ESS_Student_loc_IntractLik_m5[j] <- ESS(sample_Student_loc_IntractLik_m5[[j]][,1])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m100_n1000_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_Student_loc_IntractLik_m5)
+mean(ESS_Student_loc_IntractLik_m5)
+
+mean(mean_alpha_Student_loc_IntractLik_m5)
+max(max_alpha_Student_loc_IntractLik_m5)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(0.5, 1.5), ylim = c(0, 5.5))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+
+
+```
+
+```{r Student_loc_skeleton_m100_n1000_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_Student_loc_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = "mu", lwd = 3, main = paste("Student's-t location: n = ", n, "$m$ =", m), xlim = c(0.5, 1.5), ylim = c(0, 5.5))
+for(j in 2:N_rep){
+  lines(density(sample_Student_loc_IntractLik_m5[[j]][,1]), lwd = 3)
+}
+abline(v = mu, lwd = 3, lty = 2, col = "red")
+
+
+```

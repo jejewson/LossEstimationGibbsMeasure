@@ -1,0 +1,888 @@
+---
+title: "PDMPs for betaD Poisson Regression"
+author: "Jack Jewson"
+date: "7 May 2024"
+output: html_document
+---
+
+## Preamble {.tabset}
+
+### Working directory
+
++ Change this to be the directory that the stan files are saved in 
+
+```{r setwd, include=TRUE,echo=TRUE, eval=TRUE,cache=TRUE}
+
+my_dir <- "C:/Users/jjew0003/Documents/Monash_Yr1/PDMPs_IntractableLikelihood/"
+
+
+```
+
+### Packages
+
+Loading the required packages.
+
+```{r packages, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(actuar)
+library(metRology)
+library(LaplacesDemon)
+
+library(mvtnorm)
+```
+
+
+### RCPP
+
+```{r RCPP, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(Rcpp)
+
+setwd(my_dir)
+
+sourceCpp("betaD_PoissonRegression_arma.cpp")
+```
+
+# Poisson Regression Data - n = 100 {.tabset}
+
+## Data
+
+```{r data_poisson_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+
+
+p <- 5
+
+theta <- c(1, 0.5, 1.5, 0, 0)
+
+n <- 100
+
+X <- cbind(1, matrix(rnorm(n*(p-1), 0, 0.25), nrow = n, ncol = p-1))
+
+y <- rpois(n, exp(X%*%theta))
+
+```
+
+## Prior
+
+```{r prior_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m_0 <- 0
+s_0 <- 1
+
+```
+
+## PDMP 
+
+### set-up 
+
+```{r betaD_PoissonRegression_setup_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+sum_abs_X_max <- max(rowSums(abs(X)))
+
+```
+
+## m = 5 (Rcpp)
+
+```{r betaD_PoissonRegression_skeleton_m5_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+T_end <- 1000
+#T_end <- 5000
+xi_0 <- rep(0, p)
+theta_0 <- rep(1, p)
+
+beta <- 1.5
+
+
+timer_betaD_PoissonRegression_m5_rcpp.start <- Sys.time()
+skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp <- ZigZag_betaD_poisRegression_cpp_arma(T_end, xi_0, theta_0, y, X, m, beta, sum_abs_X_max, w = 1.0, m_0, s_0, N_skeleton = 100000)
+timer_betaD_PoissonRegression_m5_rcpp.end <- Sys.time()
+
+sample_betaD_PoissonRegression_m5_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$skeleton_T, skeleton_Xi = skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$skeleton_Xi, skeleton_Theta = skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$skeleton_Theta, N = 1000)
+
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m5_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_betaD_PoissonRegression_m5_rcpp.end, timer_betaD_PoissonRegression_m5_rcpp.start, units = "mins")
+
+skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$max_alpha
+skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_betaD_PoissonRegression_m5_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
+
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+ESS(sample_betaD_PoissonRegression_m5_rcpp[,1:p])
+
+```
+
+## m = 20 (Rcpp)
+
+```{r betaD_PoissonRegression_skeleton_m20_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+T_end <- 1000
+#T_end <- 5000
+xi_0 <- rep(0, p)
+theta_0 <- rep(1, p)
+
+beta <- 1.5
+
+
+timer_betaD_PoissonRegression_m20_rcpp.start <- Sys.time()
+skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp <- ZigZag_betaD_poisRegression_cpp_arma(T_end, xi_0, theta_0, y, X, m, beta, sum_abs_X_max, w = 1.0, m_0, s_0, N_skeleton = 100000)
+timer_betaD_PoissonRegression_m20_rcpp.end <- Sys.time()
+
+sample_betaD_PoissonRegression_m20_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$skeleton_T, skeleton_Xi = skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$skeleton_Xi, skeleton_Theta = skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$skeleton_Theta, N = 1000)
+
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m20_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_betaD_PoissonRegression_m20_rcpp.end, timer_betaD_PoissonRegression_m20_rcpp.start, units = "mins")
+
+skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$max_alpha
+skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_betaD_PoissonRegression_m20_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
+
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+ESS(sample_betaD_PoissonRegression_m20_rcpp[,1:p])
+
+```
+
+## m = 50 (Rcpp)
+
+```{r betaD_PoissonRegression_skeleton_m50_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 50
+
+T_end <- 1000
+#T_end <- 5000
+xi_0 <- rep(0, p)
+theta_0 <- rep(1, p)
+
+beta <- 1.5
+
+
+timer_betaD_PoissonRegression_m50_rcpp.start <- Sys.time()
+skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp <- ZigZag_betaD_poisRegression_cpp_arma(T_end, xi_0, theta_0, y, X, m, beta, sum_abs_X_max, w = 1.0, m_0, s_0, N_skeleton = 100000)
+timer_betaD_PoissonRegression_m50_rcpp.end <- Sys.time()
+
+sample_betaD_PoissonRegression_m50_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$skeleton_T, skeleton_Xi = skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$skeleton_Xi, skeleton_Theta = skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$skeleton_Theta, N = 1000)
+
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m50_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_betaD_PoissonRegression_m50_rcpp.end, timer_betaD_PoissonRegression_m50_rcpp.start, units = "mins")
+
+skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$max_alpha
+skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_betaD_PoissonRegression_m50_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
+
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+ESS(sample_betaD_PoissonRegression_m50_rcpp[,1:p])
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m50_n100_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_betaD_PoissonRegression_m5_rcpp[,1]), ylab = "Density", xlab = paste0("$\\theta_", 1,"$"), lwd = 3, main = paste("Poisson regression $n = $", n), xlim = c(theta[1] - 1, theta[1] + 1), ylim = c(0, 3.5))
+lines(density(sample_betaD_PoissonRegression_m20_rcpp[,1]), lwd = 3, col = "darkgrey", lty = 2)
+lines(density(sample_betaD_PoissonRegression_m50_rcpp[,1]), lwd = 3, col = "lightgrey", lty = 3)
+abline(v = theta[1], lwd = 3, lty = 2, col = "red")
+legend("topright", c("$m = 5$", "$m = 20$", "$m = 50$", "truth"), col = c("black", "darkgrey", "lightgrey" , "red"), lwd = rep(5, 4), lty = c(1, 2, 3, 2), bty = "n")
+
+
+for(j in 2:p){
+  plot(density(sample_betaD_PoissonRegression_m5_rcpp[,j]), ylab = "Density", xlab = paste0("$\\theta_", j,"$"), lwd = 3, main = paste("Poisson regression $n = $", n), xlim = c(theta[j] - 2, theta[j] + 2), ylim = c(0, 1))
+   lines(density(sample_betaD_PoissonRegression_m20_rcpp[,j]), lwd = 3, col = "darkgrey", lty = 2)
+  lines(density(sample_betaD_PoissonRegression_m50_rcpp[,j]), lwd = 3, col = "lightgrey", lty = 3)
+abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+  if(j == 1){
+    legend("topright", c("$m = 5$", "$m = 20$", "$m = 50$", "truth"), col = c("black", "darkgrey", "lightgrey" , "red"), lwd = rep(5, 4), lty = c(1, 2, 3, 2), bty = "n")
+  }
+}
+
+
+
+```
+
+# Poisson Regression Data - n = 100 - Repeated MCMC {.tabset}
+
+## Data
+
+```{r data_poisson_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+
+
+p <- 5
+
+theta <- c(1, 0.5, 1.5, 0, 0)
+
+n <- 100
+
+X <- cbind(1, matrix(rnorm(n*(p-1), 0, 0.25), nrow = n, ncol = p-1))
+
+y <- rpois(n, exp(X%*%theta))
+
+```
+
+## Prior
+
+```{r prior_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m_0 <- 0
+s_0 <- 1
+
+```
+
+### set-up 
+
+```{r betaD_PoissonRegression_setup_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+sum_abs_X_max <- max(rowSums(abs(X)))
+
+N_rep <- 25
+
+```
+
+
+## m = 5 repeated (Rcpp)
+
+```{r betaD_PoissonRegression_skeleton_m5_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+
+T_end <- 500
+
+set.seed(1)
+
+sample_betaD_PoissonRegression_IntractLik_m5 <- list()
+timer_betaD_PoissonRegression_IntractLik_m5 <- rep(NA, N_rep)
+max_alpha_betaD_PoissonRegression_IntractLik_m5 <- rep(NA, N_rep)
+mean_alpha_betaD_PoissonRegression_IntractLik_m5 <- rep(NA, N_rep)
+ESS_betaD_PoissonRegression_IntractLik_m5 <- matrix(NA, nrow = N_rep, ncol = p)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(p, 0, 1)
+  theta_0 <- sample(c(-1, 1), p, replace = TRUE)
+
+  timer_MMD_betaD_PoissonRegression_m5.start <- Sys.time()
+  skeleton_betaD_PoissonRegression_IntractLik_m5 <- ZigZag_betaD_poisRegression_cpp_arma(T_end, xi_0, theta_0, y, X, m, beta, sum_abs_X_max, w = 1.0, m_0, s_0, N_skeleton = 100000)
+timer_MMD_betaD_PoissonRegression_m5.end <- Sys.time()
+  
+  timer_betaD_PoissonRegression_IntractLik_m5[j] <- difftime(timer_MMD_betaD_PoissonRegression_m5.end, timer_MMD_betaD_PoissonRegression_m5.start, units = "mins")
+  
+  max_alpha_betaD_PoissonRegression_IntractLik_m5[j] <- skeleton_betaD_PoissonRegression_IntractLik_m5$max_alpha
+  mean_alpha_betaD_PoissonRegression_IntractLik_m5[j] <- skeleton_betaD_PoissonRegression_IntractLik_m5$mean_alpha
+
+  sample_betaD_PoissonRegression_IntractLik_m5[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_betaD_PoissonRegression_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_betaD_PoissonRegression_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_betaD_PoissonRegression_IntractLik_m5$skeleton_Theta, N = 1000)
+  
+  ESS_betaD_PoissonRegression_IntractLik_m5[j,] <- ESS(sample_betaD_PoissonRegression_IntractLik_m5[[j]][,1:(p)])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+
+```{r betaD_PoissonRegression_skeleton_m5_n100_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_betaD_PoissonRegression_IntractLik_m5)
+mean(ESS_betaD_PoissonRegression_IntractLik_m5)
+
+mean(mean_alpha_betaD_PoissonRegression_IntractLik_m5)
+max(max_alpha_betaD_PoissonRegression_IntractLik_m5)
+
+
+plot(density(sample_betaD_PoissonRegression_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = paste0("$\\theta_", 1,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 3.5), xlim = c(theta[1] - 1, theta[1] + 1))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m5[[i]][,1]), lwd = 3)
+  }
+abline(v = theta[1], lwd = 3, lty = 2, col = "red")
+
+
+for(j in 2:p){
+  plot(density(sample_betaD_PoissonRegression_IntractLik_m5[[1]][,j]), ylab = "Density", xlab = paste0("$\\theta_", j,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 1), xlim = c(theta[j] - 2, theta[j] + 2))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m5[[i]][,j]), lwd = 3)
+  }
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m5_n100_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_betaD_PoissonRegression_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = paste0("$\\theta_", 1,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 3.5), xlim = c(theta[1] - 1, theta[1] + 1))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m5[[i]][,1]), lwd = 3)
+  }
+abline(v = theta[1], lwd = 3, lty = 2, col = "red")
+
+
+for(j in 2:p){
+  plot(density(sample_betaD_PoissonRegression_IntractLik_m5[[1]][,j]), ylab = "Density", xlab = paste0("$\\theta_", j,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 1), xlim = c(theta[j] - 2, theta[j] + 2))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m5[[i]][,j]), lwd = 3)
+  }
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+
+```
+
+## m = 20 repeated (Rcpp)
+
+```{r betaD_PoissonRegression_skeleton_m20_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+
+T_end <- 500
+
+set.seed(1)
+
+sample_betaD_PoissonRegression_IntractLik_m20 <- list()
+timer_betaD_PoissonRegression_IntractLik_m20 <- rep(NA, N_rep)
+max_alpha_betaD_PoissonRegression_IntractLik_m20 <- rep(NA, N_rep)
+mean_alpha_betaD_PoissonRegression_IntractLik_m20 <- rep(NA, N_rep)
+ESS_betaD_PoissonRegression_IntractLik_m20 <- matrix(NA, nrow = N_rep, ncol = p)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(p, 0, 1)
+  theta_0 <- sample(c(-1, 1), p, replace = TRUE)
+
+  timer_MMD_betaD_PoissonRegression_m20.start <- Sys.time()
+  skeleton_betaD_PoissonRegression_IntractLik_m20 <- ZigZag_betaD_poisRegression_cpp_arma(T_end, xi_0, theta_0, y, X, m, beta, sum_abs_X_max, w = 1.0, m_0, s_0, N_skeleton = 100000)
+timer_MMD_betaD_PoissonRegression_m20.end <- Sys.time()
+  
+  timer_betaD_PoissonRegression_IntractLik_m20[j] <- difftime(timer_MMD_betaD_PoissonRegression_m20.end, timer_MMD_betaD_PoissonRegression_m20.start, units = "mins")
+  
+  max_alpha_betaD_PoissonRegression_IntractLik_m20[j] <- skeleton_betaD_PoissonRegression_IntractLik_m20$max_alpha
+  mean_alpha_betaD_PoissonRegression_IntractLik_m20[j] <- skeleton_betaD_PoissonRegression_IntractLik_m20$mean_alpha
+
+  sample_betaD_PoissonRegression_IntractLik_m20[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_betaD_PoissonRegression_IntractLik_m20$skeleton_T, skeleton_Xi = skeleton_betaD_PoissonRegression_IntractLik_m20$skeleton_Xi, skeleton_Theta = skeleton_betaD_PoissonRegression_IntractLik_m20$skeleton_Theta, N = 1000)
+  
+  ESS_betaD_PoissonRegression_IntractLik_m20[j,] <- ESS(sample_betaD_PoissonRegression_IntractLik_m20[[j]][,1:(p)])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+
+```{r betaD_PoissonRegression_skeleton_m20_n100_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_betaD_PoissonRegression_IntractLik_m20)
+mean(ESS_betaD_PoissonRegression_IntractLik_m20)
+
+mean(mean_alpha_betaD_PoissonRegression_IntractLik_m20)
+max(max_alpha_betaD_PoissonRegression_IntractLik_m20)
+
+
+
+plot(density(sample_betaD_PoissonRegression_IntractLik_m20[[1]][,1]), ylab = "Density", xlab = paste0("$\\theta_", 1,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 3.5), xlim = c(theta[1] - 1, theta[1] + 1))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m20[[i]][,1]), lwd = 3)
+  }
+abline(v = theta[1], lwd = 3, lty = 2, col = "red")
+
+
+for(j in 2:p){
+  plot(density(sample_betaD_PoissonRegression_IntractLik_m20[[1]][,j]), ylab = "Density", xlab = paste0("$\\theta_", j,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 1), xlim = c(theta[j] - 2, theta[j] + 2))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m20[[i]][,j]), lwd = 3)
+  }
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m20_n100_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_betaD_PoissonRegression_IntractLik_m20[[1]][,1]), ylab = "Density", xlab = paste0("$\\theta_", 1,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 3.5), xlim = c(theta[1] - 1, theta[1] + 1))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m20[[i]][,1]), lwd = 3)
+  }
+abline(v = theta[1], lwd = 3, lty = 2, col = "red")
+
+
+for(j in 2:p){
+  plot(density(sample_betaD_PoissonRegression_IntractLik_m20[[1]][,j]), ylab = "Density", xlab = paste0("$\\theta_", j,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 1), xlim = c(theta[j] - 2, theta[j] + 2))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m20[[i]][,j]), lwd = 3)
+  }
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+
+```
+
+
+# Poisson Regression Data - n = 500 {.tabset}
+
+## Data
+
+```{r data_poisson_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+
+
+p <- 5
+
+theta <- c(1, 0.5, 1.5, 0, 0)
+
+n <- 500
+
+X <- cbind(1, matrix(rnorm(n*(p-1), 0, 0.25), nrow = n, ncol = p-1))
+
+y <- rpois(n, exp(X%*%theta))
+
+```
+
+## Prior
+
+```{r prior_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m_0 <- 0
+s_0 <- 1
+
+```
+
+## PDMP 
+
+### set-up 
+
+```{r betaD_PoissonRegression_setup_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+
+
+sum_abs_X_max <- max(rowSums(abs(X)))
+
+```
+
+## m = 5 (Rcpp)
+
+```{r betaD_PoissonRegression_skeleton_m5_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+T_end <- 1000
+#T_end <- 5000
+xi_0 <- rep(0, p)
+theta_0 <- rep(1, p)
+
+beta <- 1.5
+
+
+timer_betaD_PoissonRegression_m5_rcpp.start <- Sys.time()
+skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp <- ZigZag_betaD_poisRegression_cpp_arma(T_end, xi_0, theta_0, y, X, m, beta, sum_abs_X_max, w = 1.0, m_0, s_0, N_skeleton = 100000)
+timer_betaD_PoissonRegression_m5_rcpp.end <- Sys.time()
+
+sample_betaD_PoissonRegression_m5_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$skeleton_T, skeleton_Xi = skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$skeleton_Xi, skeleton_Theta = skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$skeleton_Theta, N = 1000)
+
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m5_n500_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_betaD_PoissonRegression_m5_rcpp.end, timer_betaD_PoissonRegression_m5_rcpp.start, units = "mins")
+
+skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$max_alpha
+skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_betaD_PoissonRegression_m5_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
+
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+ESS(sample_betaD_PoissonRegression_m5_rcpp[,1:p])
+
+```
+
+## m = 20 (Rcpp)
+
+```{r betaD_PoissonRegression_skeleton_m20_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+T_end <- 1000
+#T_end <- 5000
+xi_0 <- rep(0, p)
+theta_0 <- rep(1, p)
+
+beta <- 1.5
+
+
+timer_betaD_PoissonRegression_m20_rcpp.start <- Sys.time()
+skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp <- ZigZag_betaD_poisRegression_cpp_arma(T_end, xi_0, theta_0, y, X, m, beta, sum_abs_X_max, w = 1.0, m_0, s_0, N_skeleton = 100000)
+timer_betaD_PoissonRegression_m20_rcpp.end <- Sys.time()
+
+sample_betaD_PoissonRegression_m20_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$skeleton_T, skeleton_Xi = skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$skeleton_Xi, skeleton_Theta = skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$skeleton_Theta, N = 1000)
+
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m20_n500_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_betaD_PoissonRegression_m20_rcpp.end, timer_betaD_PoissonRegression_m20_rcpp.start, units = "mins")
+
+skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$max_alpha
+skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_betaD_PoissonRegression_m20_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
+
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+ESS(sample_betaD_PoissonRegression_m20_rcpp[,1:p])
+
+```
+
+## m = 50 (Rcpp)
+
+```{r betaD_PoissonRegression_skeleton_m50_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 50
+
+T_end <- 1000
+#T_end <- 5000
+xi_0 <- rep(0, p)
+theta_0 <- rep(1, p)
+
+beta <- 1.5
+
+
+timer_betaD_PoissonRegression_m50_rcpp.start <- Sys.time()
+skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp <- ZigZag_betaD_poisRegression_cpp_arma(T_end, xi_0, theta_0, y, X, m, beta, sum_abs_X_max, w = 1.0, m_0, s_0, N_skeleton = 100000)
+timer_betaD_PoissonRegression_m50_rcpp.end <- Sys.time()
+
+sample_betaD_PoissonRegression_m50_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$skeleton_T, skeleton_Xi = skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$skeleton_Xi, skeleton_Theta = skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$skeleton_Theta, N = 1000)
+
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m50_n500_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_betaD_PoissonRegression_m50_rcpp.end, timer_betaD_PoissonRegression_m50_rcpp.start, units = "mins")
+
+skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$max_alpha
+skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_betaD_PoissonRegression_m50_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
+
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+ESS(sample_betaD_PoissonRegression_m50_rcpp[,1:p])
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m50_n500_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+plot(density(sample_betaD_PoissonRegression_m5_rcpp[,1]), ylab = "Density", xlab = paste0("$\\theta_", 1,"$"), lwd = 3, main = paste("Poisson regression $n = $", n), xlim = c(theta[1] - 0.5, theta[1] + 0.5), ylim = c(0, 8))
+lines(density(sample_betaD_PoissonRegression_m20_rcpp[,1]), lwd = 3, col = "darkgrey", lty = 2)
+lines(density(sample_betaD_PoissonRegression_m50_rcpp[,1]), lwd = 3, col = "lightgrey", lty = 3)
+abline(v = theta[1], lwd = 3, lty = 2, col = "red")
+legend("topright", c("$m = 5$", "$m = 20$", "$m = 50$", "truth"), col = c("black", "darkgrey", "lightgrey" , "red"), lwd = rep(5, 4), lty = c(1, 2, 3, 2), bty = "n")
+
+for(j in 2:p){
+  plot(density(sample_betaD_PoissonRegression_m5_rcpp[,j]), ylab = "Density", xlab = paste0("$\\theta_", j,"$"), lwd = 3, main = paste("Poisson regression $n = $", n), xlim = c(theta[j] - 1, theta[j] + 1), ylim = c(0, 2.25))
+   lines(density(sample_betaD_PoissonRegression_m20_rcpp[,j]), lwd = 3, col = "darkgrey", lty = 2)
+  lines(density(sample_betaD_PoissonRegression_m50_rcpp[,j]), lwd = 3, col = "lightgrey", lty = 3)
+abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+  if(j == 1){
+    #legend("topright", c("$m = 5$", "$m = 20$", "$m = 50$", "truth"), col = c("black", "darkgrey", "lightgrey" , "red"), lwd = rep(5, 4), lty = c(1, 2, 3, 2), bty = "n")
+  }
+}
+
+
+
+```
+
+# Poisson Regression Data - n = 500 - Repeated MCMC {.tabset}
+
+## Data
+
+```{r data_poisson_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+
+
+p <- 5
+
+theta <- c(1, 0.5, 1.5, 0, 0)
+
+n <- 500
+
+X <- cbind(1, matrix(rnorm(n*(p-1), 0, 0.25), nrow = n, ncol = p-1))
+
+y <- rpois(n, exp(X%*%theta))
+
+```
+
+## Prior
+
+```{r prior_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m_0 <- 0
+s_0 <- 1
+
+```
+
+### set-up 
+
+```{r betaD_PoissonRegression_setup_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+sum_abs_X_max <- max(rowSums(abs(X)))
+
+N_rep <- 25
+
+```
+
+
+## m = 5 repeated (Rcpp)
+
+```{r betaD_PoissonRegression_skeleton_m5_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+
+T_end <- 500
+
+set.seed(1)
+
+sample_betaD_PoissonRegression_IntractLik_m5 <- list()
+timer_betaD_PoissonRegression_IntractLik_m5 <- rep(NA, N_rep)
+max_alpha_betaD_PoissonRegression_IntractLik_m5 <- rep(NA, N_rep)
+mean_alpha_betaD_PoissonRegression_IntractLik_m5 <- rep(NA, N_rep)
+ESS_betaD_PoissonRegression_IntractLik_m5 <- matrix(NA, nrow = N_rep, ncol = p)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(p, 0, 1)
+  theta_0 <- sample(c(-1, 1), p, replace = TRUE)
+
+  timer_MMD_betaD_PoissonRegression_m5.start <- Sys.time()
+  skeleton_betaD_PoissonRegression_IntractLik_m5 <- ZigZag_betaD_poisRegression_cpp_arma(T_end, xi_0, theta_0, y, X, m, beta, sum_abs_X_max, w = 1.0, m_0, s_0, N_skeleton = 100000)
+timer_MMD_betaD_PoissonRegression_m5.end <- Sys.time()
+  
+  timer_betaD_PoissonRegression_IntractLik_m5[j] <- difftime(timer_MMD_betaD_PoissonRegression_m5.end, timer_MMD_betaD_PoissonRegression_m5.start, units = "mins")
+  
+  max_alpha_betaD_PoissonRegression_IntractLik_m5[j] <- skeleton_betaD_PoissonRegression_IntractLik_m5$max_alpha
+  mean_alpha_betaD_PoissonRegression_IntractLik_m5[j] <- skeleton_betaD_PoissonRegression_IntractLik_m5$mean_alpha
+
+  sample_betaD_PoissonRegression_IntractLik_m5[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_betaD_PoissonRegression_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_betaD_PoissonRegression_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_betaD_PoissonRegression_IntractLik_m5$skeleton_Theta, N = 1000)
+  
+  ESS_betaD_PoissonRegression_IntractLik_m5[j,] <- ESS(sample_betaD_PoissonRegression_IntractLik_m5[[j]][,1:(p)])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+
+```{r betaD_PoissonRegression_skeleton_m5_n500_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_betaD_PoissonRegression_IntractLik_m5)
+mean(ESS_betaD_PoissonRegression_IntractLik_m5)
+
+mean(mean_alpha_betaD_PoissonRegression_IntractLik_m5)
+max(max_alpha_betaD_PoissonRegression_IntractLik_m5)
+
+
+plot(density(sample_betaD_PoissonRegression_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = paste0("$\\theta_", 1,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 8), xlim = c(theta[1] - 0.5, theta[1] + 0.5))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m5[[i]][,1]), lwd = 3)
+  }
+abline(v = theta[1], lwd = 3, lty = 2, col = "red")
+
+
+for(j in 2:p){
+  plot(density(sample_betaD_PoissonRegression_IntractLik_m5[[1]][,j]), ylab = "Density", xlab = paste0("$\\theta_", j,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 2.25), xlim = c(theta[j] - 1, theta[j] + 1))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m5[[i]][,j]), lwd = 3)
+  }
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m5_n500_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_betaD_PoissonRegression_IntractLik_m5[[1]][,1]), ylab = "Density", xlab = paste0("$\\theta_", 1,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 8), xlim = c(theta[1] - 0.5, theta[1] + 0.5))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m5[[i]][,1]), lwd = 3)
+  }
+abline(v = theta[1], lwd = 3, lty = 2, col = "red")
+
+
+for(j in 2:p){
+  plot(density(sample_betaD_PoissonRegression_IntractLik_m5[[1]][,j]), ylab = "Density", xlab = paste0("$\\theta_", j,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 2.25), xlim = c(theta[j] - 1, theta[j] + 1))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m5[[i]][,j]), lwd = 3)
+  }
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+
+```
+
+## m = 20 repeated (Rcpp)
+
+```{r betaD_PoissonRegression_skeleton_m20_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+
+T_end <- 500
+
+set.seed(1)
+
+sample_betaD_PoissonRegression_IntractLik_m20 <- list()
+timer_betaD_PoissonRegression_IntractLik_m20 <- rep(NA, N_rep)
+max_alpha_betaD_PoissonRegression_IntractLik_m20 <- rep(NA, N_rep)
+mean_alpha_betaD_PoissonRegression_IntractLik_m20 <- rep(NA, N_rep)
+ESS_betaD_PoissonRegression_IntractLik_m20 <- matrix(NA, nrow = N_rep, ncol = p)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(p, 0, 1)
+  theta_0 <- sample(c(-1, 1), p, replace = TRUE)
+
+  timer_MMD_betaD_PoissonRegression_m20.start <- Sys.time()
+  skeleton_betaD_PoissonRegression_IntractLik_m20 <- ZigZag_betaD_poisRegression_cpp_arma(T_end, xi_0, theta_0, y, X, m, beta, sum_abs_X_max, w = 1.0, m_0, s_0, N_skeleton = 100000)
+timer_MMD_betaD_PoissonRegression_m20.end <- Sys.time()
+  
+  timer_betaD_PoissonRegression_IntractLik_m20[j] <- difftime(timer_MMD_betaD_PoissonRegression_m20.end, timer_MMD_betaD_PoissonRegression_m20.start, units = "mins")
+  
+  max_alpha_betaD_PoissonRegression_IntractLik_m20[j] <- skeleton_betaD_PoissonRegression_IntractLik_m20$max_alpha
+  mean_alpha_betaD_PoissonRegression_IntractLik_m20[j] <- skeleton_betaD_PoissonRegression_IntractLik_m20$mean_alpha
+
+  sample_betaD_PoissonRegression_IntractLik_m20[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_betaD_PoissonRegression_IntractLik_m20$skeleton_T, skeleton_Xi = skeleton_betaD_PoissonRegression_IntractLik_m20$skeleton_Xi, skeleton_Theta = skeleton_betaD_PoissonRegression_IntractLik_m20$skeleton_Theta, N = 1000)
+  
+  ESS_betaD_PoissonRegression_IntractLik_m20[j,] <- ESS(sample_betaD_PoissonRegression_IntractLik_m20[[j]][,1:(p)])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+
+```{r betaD_PoissonRegression_skeleton_m20_n500_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_betaD_PoissonRegression_IntractLik_m20)
+mean(ESS_betaD_PoissonRegression_IntractLik_m20)
+
+mean(mean_alpha_betaD_PoissonRegression_IntractLik_m20)
+max(max_alpha_betaD_PoissonRegression_IntractLik_m20)
+
+
+
+plot(density(sample_betaD_PoissonRegression_IntractLik_m20[[1]][,1]), ylab = "Density", xlab = paste0("$\\theta_", 1,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 8), xlim = c(theta[1] - 0.5, theta[1] + 0.5))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m20[[i]][,1]), lwd = 3)
+  }
+abline(v = theta[1], lwd = 3, lty = 2, col = "red")
+
+
+for(j in 2:p){
+  plot(density(sample_betaD_PoissonRegression_IntractLik_m20[[1]][,j]), ylab = "Density", xlab = paste0("$\\theta_", j,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 2.25), xlim = c(theta[j] - 1, theta[j] + 1))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m20[[i]][,j]), lwd = 3)
+  }
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+
+```
+
+```{r betaD_PoissonRegression_skeleton_m20_n500_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+plot(density(sample_betaD_PoissonRegression_IntractLik_m20[[1]][,1]), ylab = "Density", xlab = paste0("$\\theta_", 1,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 8), xlim = c(theta[1] - 0.5, theta[1] + 0.5))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m20[[i]][,1]), lwd = 3)
+  }
+abline(v = theta[1], lwd = 3, lty = 2, col = "red")
+
+
+for(j in 2:p){
+  plot(density(sample_betaD_PoissonRegression_IntractLik_m20[[1]][,j]), ylab = "Density", xlab = paste0("$\\theta_", j,"$"), lwd = 3, main = paste("$\\beta$D Poisson regression $n = $", n, "$m =$", m), ylim = c(0, 2.25), xlim = c(theta[j] - 1, theta[j] + 1))
+  for(i in 2:N_rep){
+    lines(density(sample_betaD_PoissonRegression_IntractLik_m20[[i]][,j]), lwd = 3)
+  }
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+
+```
+
+
+

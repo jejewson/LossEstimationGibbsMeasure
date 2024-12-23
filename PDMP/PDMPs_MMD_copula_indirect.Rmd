@@ -1,0 +1,835 @@
+---
+title: "PDMPs for MMD Copula"
+author: "Jack Jewson"
+date: "7 May 2024"
+output: html_document
+---
+
+## Preamble {.tabset}
+
+### Working directory
+
++ Change this to be the directory that the stan files are saved in 
+
+```{r setwd, include=TRUE,echo=TRUE, eval=TRUE,cache=TRUE}
+
+my_dir <- "C:/Users/jjew0003/Documents/Monash_Yr1/PDMPs_IntractableLikelihood/"
+
+
+```
+
+### Packages
+
+Loading the required packages.
+
+```{r packages, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(LaplacesDemon)
+
+library(mvtnorm)
+```
+
+
+### RCPP
+
+```{r RCPP, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(Rcpp)
+
+setwd(my_dir)
+
+sourceCpp("MMD_copula_indirect_arma.cpp")
+```
+
+# Gaussian Data - n = 100 {.tabset}
+
+## Data
+
+```{r data_sim_MVGaussian_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+N_rep <- 1
+
+theta <- 0.5 # we may get into trouble for theta not equal to 0.5
+p <- 2
+
+n <- 100
+
+y <- rmvnorm(n, rep(0, 2), diag(1 - theta, p) + matrix(theta, nrow = p, ncol = p))
+
+```
+
+## PDMP 
+
+
+### set-up 
+
+```{r copula_setup_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+u_hat <- matrix(NA, nrow = n, ncol = p)
+for(j in 1:p){
+  for(i in 1:n){
+    u_hat[i,j] <- length(which(y[,j] <= y[i,j]))/n
+  }
+  
+}
+
+#gamma <- 1
+gamma <- 0.25
+
+plot(u_hat[,1], u_hat[,2])
+
+R <- 3
+```
+
+## m = 5 (Rcpp)
+
+```{r copula_skeleton_m5_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+
+m <- 5
+
+#T_end <- 100
+T_end <- 4000
+xi_0 <- 0
+theta_0 <- 1
+
+a <- 1
+b <- 1
+
+
+timer_MMD_copula_m5_rcpp.start <- Sys.time()
+skeleton_copula_IntractLik_m5_rcpp <- ZigZag_MMD_RBF_biGaussian_copula_cpp_arma(T_end, array(xi_0, dim = c(1)), array(theta_0, dim = c(1)), u_hat, m, gamma, R, w = 1, a, b, N_skeleton = 100000)
+timer_MMD_copula_m5_rcpp.end <- Sys.time()
+
+sample_copula_IntractLik_m5_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_copula_IntractLik_m5_rcpp$skeleton_T, skeleton_Xi = skeleton_copula_IntractLik_m5_rcpp$skeleton_Xi, skeleton_Theta = skeleton_copula_IntractLik_m5_rcpp$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r copula_skeleton_m5_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_copula_m5_rcpp.end, timer_MMD_copula_m5_rcpp.start, units = "mins")
+
+skeleton_copula_IntractLik_m5_rcpp$max_alpha
+skeleton_copula_IntractLik_m5_rcpp$mean_alpha
+
+plot(density(sample_copula_IntractLik_m5_rcpp[,1]), ylab = "Density", xlab = "xi", lwd = 3, main = paste("Copula"))
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[,1])) - 1), ylab = "Density", xlab = "theta", lwd = 3, main = paste("Copula"))
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_copula_IntractLik_m5_rcpp[,1])
+
+```
+
+## m = 20 (Rcpp)
+
+```{r copula_skeleton_m20_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+#T_end <- 100
+T_end <- 4000
+xi_0 <- 0
+theta_0 <- 1
+
+a <- 1
+b <- 1
+
+
+timer_MMD_copula_m20_rcpp.start <- Sys.time()
+skeleton_copula_IntractLik_m20_rcpp <- ZigZag_MMD_RBF_biGaussian_copula_cpp_arma(T_end, array(xi_0, dim = c(1)), array(theta_0, dim = c(1)), u_hat, m, gamma, R, w = 1, a, b, N_skeleton = 100000)
+timer_MMD_copula_m20_rcpp.end <- Sys.time()
+
+sample_copula_IntractLik_m20_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_copula_IntractLik_m20_rcpp$skeleton_T, skeleton_Xi = skeleton_copula_IntractLik_m20_rcpp$skeleton_Xi, skeleton_Theta = skeleton_copula_IntractLik_m20_rcpp$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r copula_skeleton_m20_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_copula_m20_rcpp.end, timer_MMD_copula_m20_rcpp.start, units = "mins")
+
+skeleton_copula_IntractLik_m20_rcpp$max_alpha
+skeleton_copula_IntractLik_m20_rcpp$mean_alpha
+
+plot(density(sample_copula_IntractLik_m5_rcpp[,1]), ylab = "Density", xlab = "xi", lwd = 3, main = paste("Copula"))
+lines(density(sample_copula_IntractLik_m20_rcpp[,1]), lty = 2, lwd = 3)
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[,1])) - 1), ylab = "Density", xlab = "theta", lwd = 3, main = paste("Copula"))
+lines(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[,1])) - 1), lty = 2, lwd = 3)
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_copula_IntractLik_m5_rcpp[,1])
+ESS(sample_copula_IntractLik_m20_rcpp[,1])
+
+```
+
+## m = 50 (Rcpp)
+
+```{r copula_skeleton_m50_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 50
+
+#T_end <- 100
+T_end <- 4000
+xi_0 <- 0
+theta_0 <- 1
+
+a <- 1
+b <- 1
+
+
+timer_MMD_copula_m50_rcpp.start <- Sys.time()
+skeleton_copula_IntractLik_m50_rcpp <- ZigZag_MMD_RBF_biGaussian_copula_cpp_arma(T_end, array(xi_0, dim = c(1)), array(theta_0, dim = c(1)), u_hat, m, gamma, R, w = 1, a, b, N_skeleton = 100000)
+timer_MMD_copula_m50_rcpp.end <- Sys.time()
+
+sample_copula_IntractLik_m50_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_copula_IntractLik_m50_rcpp$skeleton_T, skeleton_Xi = skeleton_copula_IntractLik_m50_rcpp$skeleton_Xi, skeleton_Theta = skeleton_copula_IntractLik_m50_rcpp$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r copula_skeleton_m50_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_copula_m50_rcpp.end, timer_MMD_copula_m50_rcpp.start, units = "mins")
+
+skeleton_copula_IntractLik_m50_rcpp$max_alpha
+skeleton_copula_IntractLik_m50_rcpp$mean_alpha
+
+plot(density(sample_copula_IntractLik_m5_rcpp[,1]), ylab = "Density", xlab = "xi", lwd = 3, main = paste("Copula"))
+lines(density(sample_copula_IntractLik_m20_rcpp[,1]), lty = 2, lwd = 3)
+lines(density(sample_copula_IntractLik_m50_rcpp[,1]), lty = 3, lwd = 3)
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[,1])) - 1), ylab = "Density", xlab = "theta", lwd = 3, main = paste("Copula"))
+lines(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[,1])) - 1), lty = 2, lwd = 3)
+lines(density(2/(1+exp(-sample_copula_IntractLik_m50_rcpp[,1])) - 1), lty = 3, lwd = 3)
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_copula_IntractLik_m5_rcpp[,1])
+ESS(sample_copula_IntractLik_m20_rcpp[,1])
+ESS(sample_copula_IntractLik_m50_rcpp[,1])
+
+```
+
+
+```{r copula_skeleton_m50_n100_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[,1])) - 1), ylab = "Density", xlab = "$\\theta$", lwd = 3, main = paste("Copula $n =$", n), ylim = c(0, 1.25))
+lines(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[,1])) - 1), lty = 2, lwd = 3, col = "darkgray")
+lines(density(2/(1+exp(-sample_copula_IntractLik_m50_rcpp[,1])) - 1), lty = 3, lwd = 3, col = "lightgray")
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+legend("topleft", c("$m = 5$", "$m = 20$", "$m = 50$"), lty = c(1, 2, 3), col = c("black", "darkgray", "lightgray"), bty = "n")
+
+
+```
+
+# Gaussian Data - n = 100 - Repeated MCMC {.tabset}
+
+## Data
+
+```{r data_sim_MVGaussian_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+N_rep <- 1
+
+theta <- 0.5 # we may get into trouble for theta not equal to 0.5
+p <- 2
+
+n <- 100
+
+y <- rmvnorm(n, rep(0, 2), diag(1 - theta, p) + matrix(theta, nrow = p, ncol = p))
+
+```
+
+## set-up 
+
+```{r copula_setup_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+u_hat <- matrix(NA, nrow = n, ncol = p)
+for(j in 1:p){
+  for(i in 1:n){
+    u_hat[i,j] <- length(which(y[,j] <= y[i,j]))/n
+  }
+  
+}
+
+#gamma <- 1
+gamma <- 0.25
+
+
+plot(u_hat[,1], u_hat[,2])
+
+R <- 3
+
+N_rep <- 25
+
+```
+
+## m = 5 (Rcpp)
+
+```{r copula_skeleton_m5_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+#T_end <- 100
+T_end <- 4000
+
+a <- 1
+b <- 1
+
+set.seed(1)
+
+sample_copula_IntractLik_m5_rcpp <- list()
+timer_copula_IntractLik_m5_rcpp <- rep(NA, N_rep)
+max_alpha_copula_IntractLik_m5_rcpp <- rep(NA, N_rep)
+mean_alpha_copula_IntractLik_m5_rcpp <- rep(NA, N_rep)
+ESS_copula_IntractLik_m5_rcpp <- rep(NA, N_rep)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(1, 0, 1)
+  theta_0 <- sample(c(-1, 1), 1)
+
+  timer_MMD_copula_m5_rcpp.start <- Sys.time()
+  skeleton_copula_IntractLik_m5_rcpp <- ZigZag_MMD_RBF_biGaussian_copula_cpp_arma(T_end, array(xi_0, dim = c(1)), array(theta_0, dim = c(1)), u_hat, m, gamma, R, w = 1, a, b, N_skeleton = 100000)
+  timer_MMD_copula_m5_rcpp.end <- Sys.time()
+  
+  timer_copula_IntractLik_m5_rcpp[j] <- difftime(timer_MMD_copula_m5_rcpp.end, timer_MMD_copula_m5_rcpp.start, units = "mins")
+  
+  max_alpha_copula_IntractLik_m5_rcpp[j] <- skeleton_copula_IntractLik_m5_rcpp$max_alpha
+  mean_alpha_copula_IntractLik_m5_rcpp[j] <- skeleton_copula_IntractLik_m5_rcpp$mean_alpha
+
+  sample_copula_IntractLik_m5_rcpp[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_copula_IntractLik_m5_rcpp$skeleton_T, skeleton_Xi = skeleton_copula_IntractLik_m5_rcpp$skeleton_Xi, skeleton_Theta = skeleton_copula_IntractLik_m5_rcpp$skeleton_Theta, N = 5000)
+  
+  ESS_copula_IntractLik_m5_rcpp[j] <- ESS(sample_copula_IntractLik_m5_rcpp[[j]][,1])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+```{r copula_skeleton_m5_n100_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_copula_IntractLik_m5_rcpp)
+mean(ESS_copula_IntractLik_m5_rcpp)
+
+mean(mean_alpha_copula_IntractLik_m5_rcpp)
+max(max_alpha_copula_IntractLik_m5_rcpp)
+
+
+plot(density(sample_copula_IntractLik_m5_rcpp[[1]][,1]), ylab = "Density", xlab = "xi", lwd = 3, main = paste("Copula n =", n, "m =", m))
+for(j in 2:N_rep){
+  lines(density(sample_copula_IntractLik_m5_rcpp[[j]][,1]), lwd = 3)
+}
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[[1]][,1])) - 1), ylab = "Density", xlab = "theta", lwd = 3, main = paste("Copula n =", n, "m =", m))
+for(j in 2:N_rep){
+  lines(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[[j]][,1])) - 1), lwd = 3)
+}
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+
+
+```
+
+```{r copula_skeleton_m5_n100_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[[1]][,1])) - 1), ylab = "Density", xlab = "$\\theta$", lwd = 3, main = paste("Copula $n =$", n, "$m =$", m), ylim = c(0, 1.25), xlim = c(-1, 1))
+for(j in 2:N_rep){
+  lines(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[[j]][,1])) - 1), lwd = 3)
+}
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+## m = 20 (Rcpp)
+
+```{r copula_skeleton_m20_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+#T_end <- 100
+T_end <- 4000
+
+a <- 1
+b <- 1
+
+set.seed(1)
+
+sample_copula_IntractLik_m20_rcpp <- list()
+timer_copula_IntractLik_m20_rcpp <- rep(NA, N_rep)
+max_alpha_copula_IntractLik_m20_rcpp <- rep(NA, N_rep)
+mean_alpha_copula_IntractLik_m20_rcpp <- rep(NA, N_rep)
+ESS_copula_IntractLik_m20_rcpp <- rep(NA, N_rep)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(1, 0, 1)
+  theta_0 <- sample(c(-1, 1), 1)
+
+  timer_MMD_copula_m20_rcpp.start <- Sys.time()
+  skeleton_copula_IntractLik_m20_rcpp <- ZigZag_MMD_RBF_biGaussian_copula_cpp_arma(T_end, array(xi_0, dim = c(1)), array(theta_0, dim = c(1)), u_hat, m, gamma, R, w = 1, a, b, N_skeleton = 100000)
+  timer_MMD_copula_m20_rcpp.end <- Sys.time()
+  
+  timer_copula_IntractLik_m20_rcpp[j] <- difftime(timer_MMD_copula_m20_rcpp.end, timer_MMD_copula_m20_rcpp.start, units = "mins")
+  
+  max_alpha_copula_IntractLik_m20_rcpp[j] <- skeleton_copula_IntractLik_m20_rcpp$max_alpha
+  mean_alpha_copula_IntractLik_m20_rcpp[j] <- skeleton_copula_IntractLik_m20_rcpp$mean_alpha
+
+  sample_copula_IntractLik_m20_rcpp[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_copula_IntractLik_m20_rcpp$skeleton_T, skeleton_Xi = skeleton_copula_IntractLik_m20_rcpp$skeleton_Xi, skeleton_Theta = skeleton_copula_IntractLik_m20_rcpp$skeleton_Theta, N = 5000)
+  
+  ESS_copula_IntractLik_m20_rcpp[j] <- ESS(sample_copula_IntractLik_m20_rcpp[[j]][,1])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+```{r copula_skeleton_m20_n100_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_copula_IntractLik_m20_rcpp)
+mean(ESS_copula_IntractLik_m20_rcpp)
+
+mean(mean_alpha_copula_IntractLik_m20_rcpp)
+max(max_alpha_copula_IntractLik_m20_rcpp)
+
+
+plot(density(sample_copula_IntractLik_m20_rcpp[[1]][,1]), ylab = "Density", xlab = "xi", lwd = 3, main = paste("Copula n =", n, "m =", m))
+for(j in 2:N_rep){
+  lines(density(sample_copula_IntractLik_m20_rcpp[[j]][,1]), lwd = 3)
+}
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[[1]][,1])) - 1), ylab = "Density", xlab = "theta", lwd = 3, main = paste("Copula n =", n, "m =", m))
+for(j in 2:N_rep){
+  lines(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[[j]][,1])) - 1), lwd = 3)
+}
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+
+
+```
+
+```{r copula_skeleton_m20_n100_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[[1]][,1])) - 1), ylab = "Density", xlab = "$\\theta$", lwd = 3, main = paste("Copula $n =$", n, "$m =$", m), ylim = c(0, 1.25), xlim = c(-1, 1))
+for(j in 2:N_rep){
+  lines(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[[j]][,1])) - 1), lwd = 3)
+}
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+# Gaussian Data - n = 500 {.tabset}
+
+## Data
+
+```{r data_sim_MVGaussian_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+N_rep <- 1
+
+theta <- 0.5 # we may get into trouble for theta not equal to 0.5
+p <- 2
+
+n <- 500
+
+y <- rmvnorm(n, rep(0, 2), diag(1 - theta, p) + matrix(theta, nrow = p, ncol = p))
+
+```
+
+
+## PDMP 
+
+### set-up 
+
+```{r copula_setup_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+u_hat <- matrix(NA, nrow = n, ncol = p)
+for(j in 1:p){
+  for(i in 1:n){
+    u_hat[i,j] <- length(which(y[,j] <= y[i,j]))/n
+  }
+  
+}
+
+#gamma <- 1
+gamma <- 0.25
+
+
+plot(u_hat[,1], u_hat[,2])
+
+R <- 3
+
+
+
+```
+
+## m = 5 (Rcpp)
+
+```{r copula_skeleton_m5_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+#T_end <- 100
+T_end <- 2000
+xi_0 <- 0
+theta_0 <- 1
+
+a <- 1
+b <- 1
+
+
+timer_MMD_copula_m5_rcpp.start <- Sys.time()
+skeleton_copula_IntractLik_m5_rcpp <- ZigZag_MMD_RBF_biGaussian_copula_cpp_arma(T_end, array(xi_0, dim = c(1)), array(theta_0, dim = c(1)), u_hat, m, gamma, R, w = 1, a, b, N_skeleton = 100000)
+timer_MMD_copula_m5_rcpp.end <- Sys.time()
+
+sample_copula_IntractLik_m5_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_copula_IntractLik_m5_rcpp$skeleton_T, skeleton_Xi = skeleton_copula_IntractLik_m5_rcpp$skeleton_Xi, skeleton_Theta = skeleton_copula_IntractLik_m5_rcpp$skeleton_Theta, N = 5000)
+
+```
+
+```{r copula_skeleton_m5_n500_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_copula_m5_rcpp.end, timer_MMD_copula_m5_rcpp.start, units = "mins")
+
+skeleton_copula_IntractLik_m5_rcpp$max_alpha
+skeleton_copula_IntractLik_m5_rcpp$mean_alpha
+
+plot(density(sample_copula_IntractLik_m5_rcpp[,1]), ylab = "Density", xlab = "xi", lwd = 3, main = paste("Copula"))
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[,1])) - 1), ylab = "Density", xlab = "theta", lwd = 3, main = paste("Copula"))
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_copula_IntractLik_m5_rcpp[,1])
+
+```
+
+## m = 20 (Rcpp)
+
+```{r copula_skeleton_m20_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+#T_end <- 100
+T_end <- 2000
+xi_0 <- 0
+theta_0 <- 1
+
+a <- 1
+b <- 1
+
+
+timer_MMD_copula_m20_rcpp.start <- Sys.time()
+skeleton_copula_IntractLik_m20_rcpp <- ZigZag_MMD_RBF_biGaussian_copula_cpp_arma(T_end, array(xi_0, dim = c(1)), array(theta_0, dim = c(1)), u_hat, m, gamma, R, w = 1, a, b, N_skeleton = 100000)
+timer_MMD_copula_m20_rcpp.end <- Sys.time()
+
+sample_copula_IntractLik_m20_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_copula_IntractLik_m20_rcpp$skeleton_T, skeleton_Xi = skeleton_copula_IntractLik_m20_rcpp$skeleton_Xi, skeleton_Theta = skeleton_copula_IntractLik_m20_rcpp$skeleton_Theta, N = 5000)
+
+```
+
+```{r copula_skeleton_m20_n500_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_copula_m20_rcpp.end, timer_MMD_copula_m20_rcpp.start, units = "mins")
+
+skeleton_copula_IntractLik_m20_rcpp$max_alpha
+skeleton_copula_IntractLik_m20_rcpp$mean_alpha
+
+plot(density(sample_copula_IntractLik_m5_rcpp[,1]), ylab = "Density", xlab = "xi", lwd = 3, main = paste("Copula"))
+lines(density(sample_copula_IntractLik_m20_rcpp[,1]), lty = 2, lwd = 3)
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[,1])) - 1), ylab = "Density", xlab = "theta", lwd = 3, main = paste("Copula"))
+lines(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[,1])) - 1), lty = 2, lwd = 3)
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_copula_IntractLik_m5_rcpp[,1])
+ESS(sample_copula_IntractLik_m20_rcpp[,1])
+
+```
+
+## m = 50 (Rcpp)
+
+```{r copula_skeleton_m50_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 50
+
+#T_end <- 100
+T_end <- 2000
+xi_0 <- 0
+theta_0 <- 1
+
+a <- 1
+b <- 1
+
+
+timer_MMD_copula_m50_rcpp.start <- Sys.time()
+skeleton_copula_IntractLik_m50_rcpp <- ZigZag_MMD_RBF_biGaussian_copula_cpp_arma(T_end, array(xi_0, dim = c(1)), array(theta_0, dim = c(1)), u_hat, m, gamma, R, w = 1, a, b, N_skeleton = 100000)
+timer_MMD_copula_m50_rcpp.end <- Sys.time()
+
+sample_copula_IntractLik_m50_rcpp <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_copula_IntractLik_m50_rcpp$skeleton_T, skeleton_Xi = skeleton_copula_IntractLik_m50_rcpp$skeleton_Xi, skeleton_Theta = skeleton_copula_IntractLik_m50_rcpp$skeleton_Theta, N = 5000)
+
+```
+
+```{r copula_skeleton_m50_n500_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_copula_m50_rcpp.end, timer_MMD_copula_m50_rcpp.start, units = "mins")
+
+skeleton_copula_IntractLik_m50_rcpp$max_alpha
+skeleton_copula_IntractLik_m50_rcpp$mean_alpha
+
+plot(density(sample_copula_IntractLik_m5_rcpp[,1]), ylab = "Density", xlab = "xi", lwd = 3, main = paste("Copula"))
+lines(density(sample_copula_IntractLik_m20_rcpp[,1]), lty = 2, lwd = 3)
+lines(density(sample_copula_IntractLik_m50_rcpp[,1]), lty = 3, lwd = 3)
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[,1])) - 1), ylab = "Density", xlab = "theta", lwd = 3, main = paste("Copula"))
+lines(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[,1])) - 1), lty = 2, lwd = 3)
+lines(density(2/(1+exp(-sample_copula_IntractLik_m50_rcpp[,1])) - 1), lty = 3, lwd = 3)
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_copula_IntractLik_m5_rcpp[,1])
+ESS(sample_copula_IntractLik_m20_rcpp[,1])
+ESS(sample_copula_IntractLik_m50_rcpp[,1])
+
+```
+
+```{r copula_skeleton_m50_n500_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[,1])) - 1), ylab = "Density", xlab = "$\\theta$", lwd = 3, main = paste("Copula $n =$", n), ylim = c(0, 2.5))
+lines(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[,1])) - 1), lty = 2, lwd = 3, col = "darkgray")
+lines(density(2/(1+exp(-sample_copula_IntractLik_m50_rcpp[,1])) - 1), lty = 3, lwd = 3, col = "lightgray")
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+#legend("topleft", c("$m = 5$", "$m = 20$", "$m = 50$"), lty = c(1, 2, 3), col = c("black", "darkgray", "lightgray"), bty = "n")
+
+
+```
+
+
+# Gaussian Data - n = 500 - Repeated MCMC {.tabset}
+
+## Data
+
+```{r data_sim_MVGaussian_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+N_rep <- 1
+
+theta <- 0.5 # we may get into trouble for theta not equal to 0.5
+p <- 2
+
+n <- 500
+
+y <- rmvnorm(n, rep(0, 2), diag(1 - theta, p) + matrix(theta, nrow = p, ncol = p))
+
+```
+
+## set-up 
+
+```{r copula_setup_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+u_hat <- matrix(NA, nrow = n, ncol = p)
+for(j in 1:p){
+  for(i in 1:n){
+    u_hat[i,j] <- length(which(y[,j] <= y[i,j]))/n
+  }
+  
+}
+
+#gamma <- 1
+gamma <- 0.25
+
+
+plot(u_hat[,1], u_hat[,2])
+
+R <- 3
+
+
+N_rep <- 25
+
+
+```
+
+## m = 5 (Rcpp)
+
+```{r copula_skeleton_m5_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+#T_end <- 100
+T_end <- 2000
+
+a <- 1
+b <- 1
+
+set.seed(1)
+
+sample_copula_IntractLik_m5_rcpp <- list()
+timer_copula_IntractLik_m5_rcpp <- rep(NA, N_rep)
+max_alpha_copula_IntractLik_m5_rcpp <- rep(NA, N_rep)
+mean_alpha_copula_IntractLik_m5_rcpp <- rep(NA, N_rep)
+ESS_copula_IntractLik_m5_rcpp <- rep(NA, N_rep)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(1, 0, 1)
+  theta_0 <- sample(c(-1, 1), 1)
+
+  timer_MMD_copula_m5_rcpp.start <- Sys.time()
+  skeleton_copula_IntractLik_m5_rcpp <- ZigZag_MMD_RBF_biGaussian_copula_cpp_arma(T_end, array(xi_0, dim = c(1)), array(theta_0, dim = c(1)), u_hat, m, gamma, R, w = 1, a, b, N_skeleton = 100000)
+  timer_MMD_copula_m5_rcpp.end <- Sys.time()
+  
+  timer_copula_IntractLik_m5_rcpp[j] <- difftime(timer_MMD_copula_m5_rcpp.end, timer_MMD_copula_m5_rcpp.start, units = "mins")
+  
+  max_alpha_copula_IntractLik_m5_rcpp[j] <- skeleton_copula_IntractLik_m5_rcpp$max_alpha
+  mean_alpha_copula_IntractLik_m5_rcpp[j] <- skeleton_copula_IntractLik_m5_rcpp$mean_alpha
+
+  sample_copula_IntractLik_m5_rcpp[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_copula_IntractLik_m5_rcpp$skeleton_T, skeleton_Xi = skeleton_copula_IntractLik_m5_rcpp$skeleton_Xi, skeleton_Theta = skeleton_copula_IntractLik_m5_rcpp$skeleton_Theta, N = 5000)
+  
+  ESS_copula_IntractLik_m5_rcpp[j] <- ESS(sample_copula_IntractLik_m5_rcpp[[j]][,1])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+```
+
+```{r copula_skeleton_m5_n500_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+R
+
+mean(timer_copula_IntractLik_m5_rcpp)
+mean(ESS_copula_IntractLik_m5_rcpp)
+
+mean(mean_alpha_copula_IntractLik_m5_rcpp)
+max(max_alpha_copula_IntractLik_m5_rcpp)
+
+
+plot(density(sample_copula_IntractLik_m5_rcpp[[1]][,1]), ylab = "Density", xlab = "xi", lwd = 3, main = paste("Copula n =", n, "m =", m))
+for(j in 2:N_rep){
+  lines(density(sample_copula_IntractLik_m5_rcpp[[j]][,1]), lwd = 3)
+}
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[[1]][,1])) - 1), ylab = "Density", xlab = "theta", lwd = 3, main = paste("Copula n =", n, "m =", m))
+for(j in 2:N_rep){
+  lines(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[[j]][,1])) - 1), lwd = 3)
+}
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+
+
+```
+
+```{r copula_skeleton_m5_n500_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[[1]][,1])) - 1), ylab = "Density", xlab = "$\\theta$", lwd = 3, main = paste("Copula $n =$", n, "$m =$", m), ylim = c(0, 2.5), xlim = c(-0.2, 1))
+for(j in 2:N_rep){
+  lines(density(2/(1+exp(-sample_copula_IntractLik_m5_rcpp[[j]][,1])) - 1), lwd = 3)
+}
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+## m = 20 (Rcpp)
+
+```{r copula_skeleton_m20_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+#T_end <- 100
+T_end <- 2000
+
+a <- 1
+b <- 1
+
+set.seed(1)
+
+sample_copula_IntractLik_m20_rcpp <- list()
+timer_copula_IntractLik_m20_rcpp <- rep(NA, N_rep)
+max_alpha_copula_IntractLik_m20_rcpp <- rep(NA, N_rep)
+mean_alpha_copula_IntractLik_m20_rcpp <- rep(NA, N_rep)
+ESS_copula_IntractLik_m20_rcpp <- rep(NA, N_rep)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(1, 0, 1)
+  theta_0 <- sample(c(-1, 1), 1)
+
+  timer_MMD_copula_m20_rcpp.start <- Sys.time()
+  skeleton_copula_IntractLik_m20_rcpp <- ZigZag_MMD_RBF_biGaussian_copula_cpp_arma(T_end, array(xi_0, dim = c(1)), array(theta_0, dim = c(1)), u_hat, m, gamma, R, w = 1, a, b, N_skeleton = 100000)
+  timer_MMD_copula_m20_rcpp.end <- Sys.time()
+  
+  timer_copula_IntractLik_m20_rcpp[j] <- difftime(timer_MMD_copula_m20_rcpp.end, timer_MMD_copula_m20_rcpp.start, units = "mins")
+  
+  max_alpha_copula_IntractLik_m20_rcpp[j] <- skeleton_copula_IntractLik_m20_rcpp$max_alpha
+  mean_alpha_copula_IntractLik_m20_rcpp[j] <- skeleton_copula_IntractLik_m20_rcpp$mean_alpha
+
+  sample_copula_IntractLik_m20_rcpp[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_copula_IntractLik_m20_rcpp$skeleton_T, skeleton_Xi = skeleton_copula_IntractLik_m20_rcpp$skeleton_Xi, skeleton_Theta = skeleton_copula_IntractLik_m20_rcpp$skeleton_Theta, N = 5000)
+  
+  ESS_copula_IntractLik_m20_rcpp[j] <- ESS(sample_copula_IntractLik_m20_rcpp[[j]][,1])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+```
+
+```{r copula_skeleton_m20_n500_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+R
+
+mean(timer_copula_IntractLik_m20_rcpp)
+mean(ESS_copula_IntractLik_m20_rcpp)
+
+mean(mean_alpha_copula_IntractLik_m20_rcpp)
+max(max_alpha_copula_IntractLik_m20_rcpp)
+
+
+plot(density(sample_copula_IntractLik_m20_rcpp[[1]][,1]), ylab = "Density", xlab = "xi", lwd = 3, main = paste("Copula n =", n, "m =", m))
+for(j in 2:N_rep){
+  lines(density(sample_copula_IntractLik_m20_rcpp[[j]][,1]), lwd = 3)
+}
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[[1]][,1])) - 1), ylab = "Density", xlab = "theta", lwd = 3, main = paste("Copula n =", n, "m =", m))
+for(j in 2:N_rep){
+  lines(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[[j]][,1])) - 1), lwd = 3)
+}
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+
+
+```
+
+```{r copula_skeleton_m20_n500_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+plot(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[[1]][,1])) - 1), ylab = "Density", xlab = "$\\theta$", lwd = 3, main = paste("Copula $n =$", n, "$m =$", m), ylim = c(0, 2.5), xlim = c(-0.2, 1))
+for(j in 2:N_rep){
+  lines(density(2/(1+exp(-sample_copula_IntractLik_m20_rcpp[[j]][,1])) - 1), lwd = 3)
+}
+abline(v = theta, lwd = 3, lty = 2, col = "red")
+
+
+```
+

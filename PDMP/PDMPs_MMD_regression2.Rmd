@@ -1,0 +1,1109 @@
+---
+title: "PDMPs for MMD Regression"
+author: "Jack Jewson"
+date: "7 May 2024"
+output: html_document
+---
+
+## Preamble {.tabset}
+
+### Working directory
+
++ Change this to be the directory that the stan files are saved in 
+
+```{r setwd, include=TRUE,echo=TRUE, eval=TRUE,cache=TRUE}
+
+my_dir <- "C:/Users/jjew0003/Documents/Monash_Yr1/PDMPs_IntractableLikelihood/"
+
+
+```
+
+### Packages
+
+Loading the required packages.
+
+```{r packages, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(actuar)
+library(metRology)
+library(LaplacesDemon)
+
+```
+
+
+### RCPP
+
+```{r RCPP, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(Rcpp)
+
+setwd(my_dir)
+
+sourceCpp("MMD_regression_arma.cpp")
+```
+
+
+### Also learning the scale
+
+want the probability that this bound would be breached by all $m$ observations to be say $10^{-6}$ and as they are iid this mean we want the $m$th root 
+
+```{r probabilistic_bound , include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+
+prob_all <- 10^{-6}
+
+m <- 5
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+```
+
+# No contamination - n = 100 {.tabset}
+
+## Data
+
+```{r data_sim_Gaussian_regression_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+N_rep <- 1
+
+beta_0 <- c(4, 4, 3, 3, 2, 2, 1, 1) 
+p <- length(beta_0)
+sigma_0 <- 1
+
+n <- 100
+
+X <- matrix(rnorm(n*p, 0, 1), nrow = n, ncol = p)
+
+y <- X%*%beta_0 + rlaplace(n, 0, sigma_0)
+
+OLS <- lm(y ~ X + 0)
+OLS$coefficients
+```
+
+## Prior
+
+```{r prior_Gaussian_regression_n100, include=TRUE,echo=TRUE, eval = TRUE,  cache=TRUE}
+
+m_0 <- 0
+s_0 <- 5
+a_0 <- 2
+b_0 <- 0.5
+
+```
+
+## PDMP 
+
+### set-up 
+
+```{r Gaussian_regression_setup_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+prob_all <- 10^{-6}
+
+gamma <- 1
+
+```
+
+## m = 5 (Rcpp)
+
+```{r student_Gaussian_regression_skeleton_m5_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+T_end <- 4000
+xi_0 <- c(rep(0, p), log(1))
+theta_0 <- rep(1, p+1)
+
+
+timer_MMD_Gaussian_regression_m5.start <- Sys.time()
+skeleton_Gaussian_regression_IntractLik_m5 <- ZigZag_MMD_RBF_Gaussian_regression_cpp_arma(T_end, xi_0, theta_0, y, X, m, gamma, m_0, s_0, a_0, b_0, R, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Gaussian_regression_m5.end <- Sys.time()
+
+sample_Gaussian_regression_IntractLik_m5 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Gaussian_regression_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Gaussian_regression_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Gaussian_regression_IntractLik_m5$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m5_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Gaussian_regression_m5.end, timer_MMD_Gaussian_regression_m5.start, units = "mins")
+
+skeleton_Gaussian_regression_IntractLik_m5$max_alpha
+skeleton_Gaussian_regression_IntractLik_m5$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[,j]), ylab = "Density", xlab = paste0("beta", j), lwd = 3, main = paste("Gaussian regression"))
+abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m5[,9]), ylab = "Density", xlab = "log(sigma)", lwd = 3, main = paste("Gaussian regression"))
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[,9])), ylab = "Density", xlab = "sigma2", lwd = 3, main = paste("Gaussian regression"), xlim = c(0, 5))
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_Gaussian_regression_IntractLik_m5[,2])
+ESS(sample_Gaussian_regression_IntractLik_m5[,3])
+```
+
+## m = 20 (Rcpp)
+
+```{r student_Gaussian_regression_skeleton_m20_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+T_end <- 4000
+xi_0 <- c(rep(0, p), log(1))
+theta_0 <- rep(1, p+1)
+
+
+timer_MMD_Gaussian_regression_m20.start <- Sys.time()
+skeleton_Gaussian_regression_IntractLik_m20 <- ZigZag_MMD_RBF_Gaussian_regression_cpp_arma(T_end, xi_0, theta_0, y, X, m, gamma, m_0, s_0, a_0, b_0, R, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Gaussian_regression_m20.end <- Sys.time()
+
+
+sample_Gaussian_regression_IntractLik_m20 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Gaussian_regression_IntractLik_m20$skeleton_T, skeleton_Xi = skeleton_Gaussian_regression_IntractLik_m20$skeleton_Xi, skeleton_Theta = skeleton_Gaussian_regression_IntractLik_m20$skeleton_Theta, N = 5000)
+
+```
+
+```{r student_generator_loc_scale_skeleton_m20_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Gaussian_regression_m20.end, timer_MMD_Gaussian_regression_m20.start, units = "mins")
+
+skeleton_Gaussian_regression_IntractLik_m20$max_alpha
+skeleton_Gaussian_regression_IntractLik_m20$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[,j]), ylab = "Density", xlab = paste0("beta", j), lwd = 3, main = paste("Gaussian regression"))
+  lines(density(sample_Gaussian_regression_IntractLik_m20[,j]), lwd = 3, col = "darkgrey")
+abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m5[,9]), ylab = "Density", xlab = "log(sigma)", lwd = 3, main = paste("Gaussian regression"))
+lines(density(sample_Gaussian_regression_IntractLik_m20[,9]), lwd = 3, col = "darkgrey")
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[,9])), ylab = "Density", xlab = "sigma2", lwd = 3, main = paste("Gaussian regression"), xlim = c(0, 5))
+lines(density(exp(2*sample_Gaussian_regression_IntractLik_m20[,9])), lwd = 3, col = "darkgrey")
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_Gaussian_regression_IntractLik_m20[,2])
+ESS(sample_Gaussian_regression_IntractLik_m20[,3])
+```
+
+## m = 50  (Rcpp)
+
+```{r student_Gaussian_regression_skeleton_m50_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 50
+
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+T_end <- 4000
+xi_0 <- c(rep(0, p), log(1))
+theta_0 <- rep(1, p+1)
+
+
+timer_MMD_Gaussian_regression_m50.start <- Sys.time()
+skeleton_Gaussian_regression_IntractLik_m50 <- ZigZag_MMD_RBF_Gaussian_regression_cpp_arma(T_end, xi_0, theta_0, y, X, m, gamma, m_0, s_0, a_0, b_0, R, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Gaussian_regression_m50.end <- Sys.time()
+
+
+sample_Gaussian_regression_IntractLik_m50 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Gaussian_regression_IntractLik_m50$skeleton_T, skeleton_Xi = skeleton_Gaussian_regression_IntractLik_m50$skeleton_Xi, skeleton_Theta = skeleton_Gaussian_regression_IntractLik_m50$skeleton_Theta, N = 5000)
+
+```
+
+```{r student_generator_loc_scale_skeleton_m50_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Gaussian_regression_m50.end, timer_MMD_Gaussian_regression_m5.start, units = "mins")
+
+skeleton_Gaussian_regression_IntractLik_m50$max_alpha
+skeleton_Gaussian_regression_IntractLik_m50$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[,j]), ylab = "Density", xlab = paste0("beta", j), lwd = 3, main = paste("Gaussian regression"))
+   lines(density(sample_Gaussian_regression_IntractLik_m20[,j]), lwd = 3, col = "darkgrey")
+  lines(density(sample_Gaussian_regression_IntractLik_m50[,j]), lwd = 3, col = "lightgrey")
+abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m5[,9]), ylab = "Density", xlab = "log(sigma)", lwd = 3, main = paste("Gaussian regression"))
+lines(density(sample_Gaussian_regression_IntractLik_m20[,9]), lwd = 3, col = "darkgrey")
+lines(density(sample_Gaussian_regression_IntractLik_m50[,9]), lwd = 3, col = "lightgrey")
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[,9])), ylab = "Density", xlab = "sigma2", lwd = 3, main = paste("Gaussian regression"))
+lines(density(exp(2*sample_Gaussian_regression_IntractLik_m20[,9])), lwd = 3, col = "darkgrey")
+lines(density(exp(2*sample_Gaussian_regression_IntractLik_m50[,9])), lwd = 3, col = "lightgrey")
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_Gaussian_regression_IntractLik_m50[,2])
+ESS(sample_Gaussian_regression_IntractLik_m50[,3])
+```
+
+```{r student_generator_loc_scale_skeleton_m50_n100_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[,j]), ylab = "Density", xlab = paste0("$\\beta_", j,"$"), lwd = 3, main = paste("Gaussian regression $n = $", n), xlim = c(beta_0[j] - 2, beta_0[j] + 2), ylim = c(0, 2))
+   lines(density(sample_Gaussian_regression_IntractLik_m20[,j]), lwd = 3, col = "darkgrey", lty = 2)
+  lines(density(sample_Gaussian_regression_IntractLik_m50[,j]), lwd = 3, col = "lightgrey", lty = 3)
+abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+if(j == 1){
+  legend("topright", c("$m = 5$", "$m = 20$", "$m = 50$", "truth"), col = c("black", "darkgrey", "lightgrey" , "red"), lwd = rep(5, 4), lty = c(1, 2, 3, 2), bty = "n")
+}
+}
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[,9])), ylab = "Density", xlab = "$\\sigma^2$", lwd = 3, main = paste("Gaussian regression $n = $", n), xlim = c(0, 5), ylim = c(0, 1))
+lines(density(exp(2*sample_Gaussian_regression_IntractLik_m20[,9])), lwd = 3, col = "darkgrey", lty = 2)
+lines(density(exp(2*sample_Gaussian_regression_IntractLik_m50[,9])), lwd = 3, col = "lightgrey", lty = 3)
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+#legend("topright", c("$m = 5$", "$m = 20$", "$m = 50$", "truth"), col = c("black", "darkgrey", "lightgrey" , "red"), lwd = rep(5, 4), lty = c(1, 2, 3, 2), bty = "n")
+
+
+```
+
+
+# No contamination - n = 100 - Repeated MCMC {.tabset}
+
+## Data
+
+```{r data_sim_Gaussian_regression_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+N_rep <- 1
+
+beta_0 <- c(4, 4, 3, 3, 2, 2, 1, 1) 
+p <- length(beta_0)
+sigma_0 <- 1
+
+n <- 100
+
+X <- matrix(rnorm(n*p, 0, 1), nrow = n, ncol = p)
+
+y <- X%*%beta_0 + rlaplace(n, 0, sigma_0)
+
+OLS <- lm(y ~ X + 0)
+OLS$coefficients
+```
+
+## Prior
+
+```{r prior_Gaussian_regression_n100_rep, include=TRUE,echo=TRUE, eval = TRUE,  cache=TRUE}
+
+m_0 <- 0
+s_0 <- 5
+a_0 <- 2
+b_0 <- 0.5
+
+```
+
+## PDMP 
+
+### set-up 
+
+```{r Gaussian_regression_setup_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+prob_all <- 10^{-6}
+
+gamma <- 1
+
+N_rep <- 25
+
+```
+
+## m = 5 (Rcpp)
+
+```{r student_Gaussian_regression_skeleton_m5_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+T_end <- 4000
+xi_0 <- c(rep(0, p), log(1))
+theta_0 <- rep(1, p+1)
+
+
+set.seed(1)
+
+sample_Gaussian_regression_IntractLik_m5 <- list()
+timer_Gaussian_regression_IntractLik_m5 <- rep(NA, N_rep)
+max_alpha_Gaussian_regression_IntractLik_m5 <- rep(NA, N_rep)
+mean_alpha_Gaussian_regression_IntractLik_m5 <- rep(NA, N_rep)
+ESS_Gaussian_regression_IntractLik_m5 <- matrix(NA, nrow = N_rep, ncol = p+1)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(p+1, 0, 1)
+  theta_0 <- sample(c(-1, 1), p+1, replace = TRUE)
+
+  timer_MMD_Gaussian_regression_m5.start <- Sys.time()
+  skeleton_Gaussian_regression_IntractLik_m5 <- ZigZag_MMD_RBF_Gaussian_regression_cpp_arma(T_end, xi_0, theta_0, y, X, m, gamma, m_0, s_0, a_0, b_0, R, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Gaussian_regression_m5.end <- Sys.time()
+  
+  timer_Gaussian_regression_IntractLik_m5[j] <- difftime(timer_MMD_Gaussian_regression_m5.end, timer_MMD_Gaussian_regression_m5.start, units = "mins")
+  
+  max_alpha_Gaussian_regression_IntractLik_m5[j] <- skeleton_Gaussian_regression_IntractLik_m5$max_alpha
+  mean_alpha_Gaussian_regression_IntractLik_m5[j] <- skeleton_Gaussian_regression_IntractLik_m5$mean_alpha
+
+  sample_Gaussian_regression_IntractLik_m5[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Gaussian_regression_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Gaussian_regression_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Gaussian_regression_IntractLik_m5$skeleton_Theta, N = 5000)
+  
+  ESS_Gaussian_regression_IntractLik_m5[j,] <- ESS(sample_Gaussian_regression_IntractLik_m5[[j]][,1:(p+1)])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+
+```{r student_generator_loc_scale_skeleton_m5_n100_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_Gaussian_regression_IntractLik_m5)
+mean(ESS_Gaussian_regression_IntractLik_m5)
+
+mean(mean_alpha_Gaussian_regression_IntractLik_m5)
+max(max_alpha_Gaussian_regression_IntractLik_m5)
+
+
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[[1]][,j]), ylab = "Density", xlab = paste0("$\\beta_", j,"$"), lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), ylim = c(0, 2), xlim = c(beta_0[j] - 2, beta_0[j] + 2))
+  for(i in 2:N_rep){
+    lines(density(sample_Gaussian_regression_IntractLik_m5[[i]][,j]), lwd = 3)
+  }
+  abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m5[[1]][,9]), ylab = "Density", xlab = "$\\log(\\sigma)$", lwd = 3, main= paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(-0.75, 1.25), ylim = c(0, 2.5))
+for(i in 2:N_rep){
+  lines(density(sample_Gaussian_regression_IntractLik_m5[[i]][,9]), lwd = 3)
+}
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[[1]][,9])), ylab = "Density", xlab = "$\\sigma^2$", lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(0, 5), ylim = c(0, 1))
+for(i in 2:N_rep){
+  lines(density(exp(2*sample_Gaussian_regression_IntractLik_m5[[i]][,9])), lwd = 3)
+}
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m5_n100_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[[1]][,j]), ylab = "Density", xlab = paste0("$\\beta_", j,"$"), lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), ylim = c(0, 2), xlim = c(beta_0[j] - 2, beta_0[j] + 2))
+  for(i in 2:N_rep){
+    lines(density(sample_Gaussian_regression_IntractLik_m5[[i]][,j]), lwd = 3)
+  }
+  abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m5[[1]][,9]), ylab = "Density", xlab = "$\\log(\\sigma)$", lwd = 3, main= paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(-0.75, 1.25), ylim = c(0, 2.5))
+for(i in 2:N_rep){
+  lines(density(sample_Gaussian_regression_IntractLik_m5[[i]][,9]), lwd = 3)
+}
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[[1]][,9])), ylab = "Density", xlab = "$\\sigma^2$", lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(0, 5), ylim = c(0, 1))
+for(i in 2:N_rep){
+  lines(density(exp(2*sample_Gaussian_regression_IntractLik_m5[[i]][,9])), lwd = 3)
+}
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+```
+
+## m = 20 (Rcpp)
+
+```{r student_Gaussian_regression_skeleton_m20_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+
+T_end <- 4000
+xi_0 <- c(rep(0, p), log(1))
+theta_0 <- rep(1, p+1)
+
+
+set.seed(1)
+
+sample_Gaussian_regression_IntractLik_m20 <- list()
+timer_Gaussian_regression_IntractLik_m20 <- rep(NA, N_rep)
+max_alpha_Gaussian_regression_IntractLik_m20 <- rep(NA, N_rep)
+mean_alpha_Gaussian_regression_IntractLik_m20 <- rep(NA, N_rep)
+ESS_Gaussian_regression_IntractLik_m20 <- matrix(NA, nrow = N_rep, ncol = p+1)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(p+1, 0, 1)
+  theta_0 <- sample(c(-1, 1), p+1, replace = TRUE)
+
+  timer_MMD_Gaussian_regression_m20.start <- Sys.time()
+  skeleton_Gaussian_regression_IntractLik_m20 <- ZigZag_MMD_RBF_Gaussian_regression_cpp_arma(T_end, xi_0, theta_0, y, X, m, gamma, m_0, s_0, a_0, b_0, R, w = sqrt(2*pi), N_skeleton = 100000)
+timer_MMD_Gaussian_regression_m20.end <- Sys.time()
+  
+  timer_Gaussian_regression_IntractLik_m20[j] <- difftime(timer_MMD_Gaussian_regression_m20.end, timer_MMD_Gaussian_regression_m20.start, units = "mins")
+  
+  max_alpha_Gaussian_regression_IntractLik_m20[j] <- skeleton_Gaussian_regression_IntractLik_m20$max_alpha
+  mean_alpha_Gaussian_regression_IntractLik_m20[j] <- skeleton_Gaussian_regression_IntractLik_m20$mean_alpha
+
+  sample_Gaussian_regression_IntractLik_m20[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Gaussian_regression_IntractLik_m20$skeleton_T, skeleton_Xi = skeleton_Gaussian_regression_IntractLik_m20$skeleton_Xi, skeleton_Theta = skeleton_Gaussian_regression_IntractLik_m20$skeleton_Theta, N = 5000)
+  
+  ESS_Gaussian_regression_IntractLik_m20[j,] <- ESS(sample_Gaussian_regression_IntractLik_m20[[j]][,1:(p+1)])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+
+```{r student_generator_loc_scale_skeleton_m20_n100_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_Gaussian_regression_IntractLik_m20)
+mean(ESS_Gaussian_regression_IntractLik_m20)
+
+mean(mean_alpha_Gaussian_regression_IntractLik_m20)
+max(max_alpha_Gaussian_regression_IntractLik_m20)
+
+
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m20[[1]][,j]), ylab = "Density", xlab = paste0("$\\beta_", j,"$"), lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), ylim = c(0, 2), xlim = c(beta_0[j] - 2, beta_0[j] + 2))
+  for(i in 2:N_rep){
+    lines(density(sample_Gaussian_regression_IntractLik_m20[[i]][,j]), lwd = 3)
+  }
+  abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m20[[1]][,9]), ylab = "Density", xlab = "$\\log(\\sigma)$", lwd = 3, main= paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(-0.75, 1.25), ylim = c(0, 2.5))
+for(i in 2:N_rep){
+  lines(density(sample_Gaussian_regression_IntractLik_m20[[i]][,9]), lwd = 3)
+}
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m20[[1]][,9])), ylab = "Density", xlab = "$\\sigma^2$", lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(0, 5), ylim = c(0, 1))
+for(i in 2:N_rep){
+  lines(density(exp(2*sample_Gaussian_regression_IntractLik_m20[[i]][,9])), lwd = 3)
+}
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m20_n100_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m20[[1]][,j]), ylab = "Density", xlab = paste0("$\\beta_", j,"$"), lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), ylim = c(0, 2), xlim = c(beta_0[j] - 2, beta_0[j] + 2))
+  for(i in 2:N_rep){
+    lines(density(sample_Gaussian_regression_IntractLik_m20[[i]][,j]), lwd = 3)
+  }
+  abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m20[[1]][,9]), ylab = "Density", xlab = "$\\log(\\sigma)$", lwd = 3, main= paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(-0.75, 1.25), ylim = c(0, 2.5))
+for(i in 2:N_rep){
+  lines(density(sample_Gaussian_regression_IntractLik_m20[[i]][,9]), lwd = 3)
+}
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m20[[1]][,9])), ylab = "Density", xlab = "$\\sigma^2$", lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(0, 5), ylim = c(0, 1))
+for(i in 2:N_rep){
+  lines(density(exp(2*sample_Gaussian_regression_IntractLik_m20[[i]][,9])), lwd = 3)
+}
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+```
+
+
+
+# No contamination - n = 500 {.tabset}
+
+## Data
+
+```{r data_sim_Gaussian_regression_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+N_rep <- 1
+
+beta_0 <- c(4, 4, 3, 3, 2, 2, 1, 1) 
+p <- length(beta_0)
+sigma_0 <- 1
+
+n <- 500
+
+X <- matrix(rnorm(n*p, 0, 1), nrow = n, ncol = p)
+
+y <- X%*%beta_0 + rlaplace(n, 0, sigma_0)
+
+OLS <- lm(y ~ X + 0)
+OLS$coefficients
+```
+
+## Prior
+
+```{r prior_Gaussian_regression_n500, include=TRUE,echo=TRUE, eval = TRUE,  cache=TRUE}
+
+m_0 <- 0
+s_0 <- 5
+a_0 <- 2
+b_0 <- 0.5
+
+```
+
+## PDMP 
+
+### set-up 
+
+```{r Gaussian_regression_setup_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+prob_all <- 10^{-6}
+
+gamma <- 1
+
+```
+
+## m = 5 (Rcpp)
+
+```{r student_Gaussian_regression_skeleton_m5_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+T_end <- 2000
+xi_0 <- c(rep(0, p), log(1))
+theta_0 <- rep(1, p+1)
+
+
+timer_MMD_Gaussian_regression_m5.start <- Sys.time()
+skeleton_Gaussian_regression_IntractLik_m5 <- ZigZag_MMD_RBF_Gaussian_regression_cpp_arma(T_end, xi_0, theta_0, y, X, m, gamma, m_0, s_0, a_0, b_0, R, w = sqrt(2*pi), N_skeleton = 500000)
+timer_MMD_Gaussian_regression_m5.end <- Sys.time()
+
+sample_Gaussian_regression_IntractLik_m5 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Gaussian_regression_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Gaussian_regression_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Gaussian_regression_IntractLik_m5$skeleton_Theta, N = 5000)
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m5_n500_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Gaussian_regression_m5.end, timer_MMD_Gaussian_regression_m5.start, units = "mins")
+
+skeleton_Gaussian_regression_IntractLik_m5$max_alpha
+skeleton_Gaussian_regression_IntractLik_m5$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[,j]), ylab = "Density", xlab = paste0("beta", j), lwd = 3, main = paste("Gaussian regression"))
+abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m5[,9]), ylab = "Density", xlab = "log(sigma)", lwd = 3, main = paste("Gaussian regression"))
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[,9])), ylab = "Density", xlab = "sigma2", lwd = 3, main = paste("Gaussian regression"), xlim = c(0, 5))
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_Gaussian_regression_IntractLik_m5[,2])
+ESS(sample_Gaussian_regression_IntractLik_m5[,3])
+```
+
+## m = 20 (Rcpp)
+
+```{r student_Gaussian_regression_skeleton_m20_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+T_end <- 2000
+xi_0 <- c(rep(0, p), log(1))
+theta_0 <- rep(1, p+1)
+
+
+timer_MMD_Gaussian_regression_m20.start <- Sys.time()
+skeleton_Gaussian_regression_IntractLik_m20 <- ZigZag_MMD_RBF_Gaussian_regression_cpp_arma(T_end, xi_0, theta_0, y, X, m, gamma, m_0, s_0, a_0, b_0, R, w = sqrt(2*pi), N_skeleton = 500000)
+timer_MMD_Gaussian_regression_m20.end <- Sys.time()
+
+
+sample_Gaussian_regression_IntractLik_m20 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Gaussian_regression_IntractLik_m20$skeleton_T, skeleton_Xi = skeleton_Gaussian_regression_IntractLik_m20$skeleton_Xi, skeleton_Theta = skeleton_Gaussian_regression_IntractLik_m20$skeleton_Theta, N = 5000)
+
+```
+
+```{r student_generator_loc_scale_skeleton_m20_n500_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Gaussian_regression_m20.end, timer_MMD_Gaussian_regression_m20.start, units = "mins")
+
+skeleton_Gaussian_regression_IntractLik_m20$max_alpha
+skeleton_Gaussian_regression_IntractLik_m20$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[,j]), ylab = "Density", xlab = paste0("beta", j), lwd = 3, main = paste("Gaussian regression"))
+  lines(density(sample_Gaussian_regression_IntractLik_m20[,j]), lwd = 3, col = "darkgrey")
+abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m5[,9]), ylab = "Density", xlab = "log(sigma)", lwd = 3, main = paste("Gaussian regression"))
+lines(density(sample_Gaussian_regression_IntractLik_m20[,9]), lwd = 3, col = "darkgrey")
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[,9])), ylab = "Density", xlab = "sigma2", lwd = 3, main = paste("Gaussian regression"), xlim = c(0, 5))
+lines(density(exp(2*sample_Gaussian_regression_IntractLik_m20[,9])), lwd = 3, col = "darkgrey")
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_Gaussian_regression_IntractLik_m20[,2])
+ESS(sample_Gaussian_regression_IntractLik_m20[,3])
+```
+
+## m = 50  (Rcpp)
+
+```{r student_Gaussian_regression_skeleton_m50_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 50
+
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+T_end <- 2000
+xi_0 <- c(rep(0, p), log(1))
+theta_0 <- rep(1, p+1)
+
+
+timer_MMD_Gaussian_regression_m50.start <- Sys.time()
+skeleton_Gaussian_regression_IntractLik_m50 <- ZigZag_MMD_RBF_Gaussian_regression_cpp_arma(T_end, xi_0, theta_0, y, X, m, gamma, m_0, s_0, a_0, b_0, R, w = sqrt(2*pi), N_skeleton = 500000)
+timer_MMD_Gaussian_regression_m50.end <- Sys.time()
+
+
+sample_Gaussian_regression_IntractLik_m50 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Gaussian_regression_IntractLik_m50$skeleton_T, skeleton_Xi = skeleton_Gaussian_regression_IntractLik_m50$skeleton_Xi, skeleton_Theta = skeleton_Gaussian_regression_IntractLik_m50$skeleton_Theta, N = 5000)
+
+```
+
+```{r student_generator_loc_scale_skeleton_m50_n500_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_Gaussian_regression_m50.end, timer_MMD_Gaussian_regression_m5.start, units = "mins")
+
+skeleton_Gaussian_regression_IntractLik_m50$max_alpha
+skeleton_Gaussian_regression_IntractLik_m50$mean_alpha
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[,j]), ylab = "Density", xlab = paste0("beta", j), lwd = 3, main = paste("Gaussian regression"))
+   lines(density(sample_Gaussian_regression_IntractLik_m20[,j]), lwd = 3, col = "darkgrey")
+  lines(density(sample_Gaussian_regression_IntractLik_m50[,j]), lwd = 3, col = "lightgrey")
+abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m5[,9]), ylab = "Density", xlab = "log(sigma)", lwd = 3, main = paste("Gaussian regression"))
+lines(density(sample_Gaussian_regression_IntractLik_m20[,9]), lwd = 3, col = "darkgrey")
+lines(density(sample_Gaussian_regression_IntractLik_m50[,9]), lwd = 3, col = "lightgrey")
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[,9])), ylab = "Density", xlab = "sigma2", lwd = 3, main = paste("Gaussian regression"))
+lines(density(exp(2*sample_Gaussian_regression_IntractLik_m20[,9])), lwd = 3, col = "darkgrey")
+lines(density(exp(2*sample_Gaussian_regression_IntractLik_m50[,9])), lwd = 3, col = "lightgrey")
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_Gaussian_regression_IntractLik_m50[,2])
+ESS(sample_Gaussian_regression_IntractLik_m50[,3])
+```
+
+```{r student_generator_loc_scale_skeleton_m50_n500_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[,j]), ylab = "Density", xlab = paste0("$\\beta_", j,"$"), lwd = 3, main = paste("Gaussian regression $n = $", n), xlim = c(beta_0[j] - 0.5, beta_0[j] + 0.5), ylim = c(0, 6))
+   lines(density(sample_Gaussian_regression_IntractLik_m20[,j]), lwd = 3, col = "darkgrey", lty = 2)
+  lines(density(sample_Gaussian_regression_IntractLik_m50[,j]), lwd = 3, col = "lightgrey", lty = 3)
+abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+if(j == 1){
+  legend("topright", c("$m = 5$", "$m = 20$", "$m = 50$", "truth"), col = c("black", "darkgrey", "lightgrey" , "red"), lwd = rep(5, 4), lty = c(1, 2, 3, 2), bty = "n")
+}
+}
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[,9])), ylab = "Density", xlab = "$\\sigma^2$", lwd = 3, main = paste("Gaussian regression $n = $", n), xlim = c(0.5, 2.5), ylim = c(0, 2.5))
+lines(density(exp(2*sample_Gaussian_regression_IntractLik_m20[,9])), lwd = 3, col = "darkgrey", lty = 2)
+lines(density(exp(2*sample_Gaussian_regression_IntractLik_m50[,9])), lwd = 3, col = "lightgrey", lty = 3)
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+legend("topright", c("$m = 5$", "$m = 20$", "$m = 50$", "truth"), col = c("black", "darkgrey", "lightgrey" , "red"), lwd = rep(5, 4), lty = c(1, 2, 3, 2), bty = "n")
+
+
+```
+
+
+
+# No contamination - n = 500 - Repeated MCMC {.tabset}
+
+## Data
+
+```{r data_sim_Gaussian_regression_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(1)
+
+N_rep <- 1
+
+beta_0 <- c(4, 4, 3, 3, 2, 2, 1, 1) 
+p <- length(beta_0)
+sigma_0 <- 1
+
+n <- 500
+
+X <- matrix(rnorm(n*p, 0, 1), nrow = n, ncol = p)
+
+y <- X%*%beta_0 + rlaplace(n, 0, sigma_0)
+
+OLS <- lm(y ~ X + 0)
+OLS$coefficients
+```
+
+## Prior
+
+```{r prior_Gaussian_regression_n500_rep, include=TRUE,echo=TRUE, eval = TRUE,  cache=TRUE}
+
+m_0 <- 0
+s_0 <- 5
+a_0 <- 2
+b_0 <- 0.5
+
+```
+
+## PDMP 
+
+### set-up 
+
+```{r Gaussian_regression_setup_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+prob_all <- 10^{-6}
+
+gamma <- 1
+
+N_rep <- 25
+
+```
+
+## m = 5 (Rcpp)
+
+```{r student_Gaussian_regression_skeleton_m5_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+T_end <- 2000
+xi_0 <- c(rep(0, p), log(1))
+theta_0 <- rep(1, p+1)
+
+
+set.seed(1)
+
+sample_Gaussian_regression_IntractLik_m5 <- list()
+timer_Gaussian_regression_IntractLik_m5 <- rep(NA, N_rep)
+max_alpha_Gaussian_regression_IntractLik_m5 <- rep(NA, N_rep)
+mean_alpha_Gaussian_regression_IntractLik_m5 <- rep(NA, N_rep)
+ESS_Gaussian_regression_IntractLik_m5 <- matrix(NA, nrow = N_rep, ncol = p+1)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(p+1, 0, 1)
+  theta_0 <- sample(c(-1, 1), p+1, replace = TRUE)
+
+  timer_MMD_Gaussian_regression_m5.start <- Sys.time()
+  skeleton_Gaussian_regression_IntractLik_m5 <- ZigZag_MMD_RBF_Gaussian_regression_cpp_arma(T_end, xi_0, theta_0, y, X, m, gamma, m_0, s_0, a_0, b_0, R, w = sqrt(2*pi), N_skeleton = 500000)
+timer_MMD_Gaussian_regression_m5.end <- Sys.time()
+  
+  timer_Gaussian_regression_IntractLik_m5[j] <- difftime(timer_MMD_Gaussian_regression_m5.end, timer_MMD_Gaussian_regression_m5.start, units = "mins")
+  
+  max_alpha_Gaussian_regression_IntractLik_m5[j] <- skeleton_Gaussian_regression_IntractLik_m5$max_alpha
+  mean_alpha_Gaussian_regression_IntractLik_m5[j] <- skeleton_Gaussian_regression_IntractLik_m5$mean_alpha
+
+  sample_Gaussian_regression_IntractLik_m5[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Gaussian_regression_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_Gaussian_regression_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_Gaussian_regression_IntractLik_m5$skeleton_Theta, N = 5000)
+  
+  ESS_Gaussian_regression_IntractLik_m5[j,] <- ESS(sample_Gaussian_regression_IntractLik_m5[[j]][,1:(p+1)])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+
+```{r student_generator_loc_scale_skeleton_m5_n500_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_Gaussian_regression_IntractLik_m5)
+mean(ESS_Gaussian_regression_IntractLik_m5)
+
+mean(mean_alpha_Gaussian_regression_IntractLik_m5)
+max(max_alpha_Gaussian_regression_IntractLik_m5)
+
+
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[[1]][,j]), ylab = "Density", xlab = paste0("$\\beta_", j,"$"), lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), ylim = c(0, 6), xlim = c(beta_0[j] - 0.5, beta_0[j] + 0.5))
+  for(i in 2:N_rep){
+    lines(density(sample_Gaussian_regression_IntractLik_m5[[i]][,j]), lwd = 3)
+  }
+  abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m5[[1]][,9]), ylab = "Density", xlab = "$\\log(\\sigma)$", lwd = 3, main= paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(-0.25, 0.75), ylim = c(0, 6))
+for(i in 2:N_rep){
+  lines(density(sample_Gaussian_regression_IntractLik_m5[[i]][,9]), lwd = 3)
+}
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[[1]][,9])), ylab = "Density", xlab = "$\\sigma^2$", lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(0.5, 2.5), ylim = c(0, 2.5))
+for(i in 2:N_rep){
+  lines(density(exp(2*sample_Gaussian_regression_IntractLik_m5[[i]][,9])), lwd = 3)
+}
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m5_n500_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m5[[1]][,j]), ylab = "Density", xlab = paste0("$\\beta_", j,"$"), lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), ylim = c(0, 6), xlim = c(beta_0[j] - 0.5, beta_0[j] + 0.5))
+  for(i in 2:N_rep){
+    lines(density(sample_Gaussian_regression_IntractLik_m5[[i]][,j]), lwd = 3)
+  }
+  abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m5[[1]][,9]), ylab = "Density", xlab = "$\\log(\\sigma)$", lwd = 3, main= paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(-0.25, 0.75), ylim = c(0, 6))
+for(i in 2:N_rep){
+  lines(density(sample_Gaussian_regression_IntractLik_m5[[i]][,9]), lwd = 3)
+}
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m5[[1]][,9])), ylab = "Density", xlab = "$\\sigma^2$", lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(0.5, 2.5), ylim = c(0, 2.5))
+for(i in 2:N_rep){
+  lines(density(exp(2*sample_Gaussian_regression_IntractLik_m5[[i]][,9])), lwd = 3)
+}
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+```
+
+## m = 20 (Rcpp)
+
+```{r student_Gaussian_regression_skeleton_m20_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+prob_one <- prob_all^{1/m}
+prob_one
+
+sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R <- sqrt(-2*log(punif(q=prob_one, 0, 1)))
+
+R
+
+T_end <- 2000
+xi_0 <- c(rep(0, p), log(1))
+theta_0 <- rep(1, p+1)
+
+
+set.seed(1)
+
+sample_Gaussian_regression_IntractLik_m20 <- list()
+timer_Gaussian_regression_IntractLik_m20 <- rep(NA, N_rep)
+max_alpha_Gaussian_regression_IntractLik_m20 <- rep(NA, N_rep)
+mean_alpha_Gaussian_regression_IntractLik_m20 <- rep(NA, N_rep)
+ESS_Gaussian_regression_IntractLik_m20 <- matrix(NA, nrow = N_rep, ncol = p+1)
+
+for(j in 1:N_rep){
+
+  xi_0 <- rnorm(p+1, 0, 1)
+  theta_0 <- sample(c(-1, 1), p+1, replace = TRUE)
+
+  timer_MMD_Gaussian_regression_m20.start <- Sys.time()
+  skeleton_Gaussian_regression_IntractLik_m20 <- ZigZag_MMD_RBF_Gaussian_regression_cpp_arma(T_end, xi_0, theta_0, y, X, m, gamma, m_0, s_0, a_0, b_0, R, w = sqrt(2*pi), N_skeleton = 500000)
+timer_MMD_Gaussian_regression_m20.end <- Sys.time()
+  
+  timer_Gaussian_regression_IntractLik_m20[j] <- difftime(timer_MMD_Gaussian_regression_m20.end, timer_MMD_Gaussian_regression_m20.start, units = "mins")
+  
+  max_alpha_Gaussian_regression_IntractLik_m20[j] <- skeleton_Gaussian_regression_IntractLik_m20$max_alpha
+  mean_alpha_Gaussian_regression_IntractLik_m20[j] <- skeleton_Gaussian_regression_IntractLik_m20$mean_alpha
+
+  sample_Gaussian_regression_IntractLik_m20[[j]] <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_Gaussian_regression_IntractLik_m20$skeleton_T, skeleton_Xi = skeleton_Gaussian_regression_IntractLik_m20$skeleton_Xi, skeleton_Theta = skeleton_Gaussian_regression_IntractLik_m20$skeleton_Theta, N = 5000)
+  
+  ESS_Gaussian_regression_IntractLik_m20[j,] <- ESS(sample_Gaussian_regression_IntractLik_m20[[j]][,1:(p+1)])
+  
+  cat("Repeat", j, "done", "\n")
+}
+
+
+
+```
+
+
+```{r student_generator_loc_scale_skeleton_m20_n500_rep_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+mean(timer_Gaussian_regression_IntractLik_m20)
+mean(ESS_Gaussian_regression_IntractLik_m20)
+
+mean(mean_alpha_Gaussian_regression_IntractLik_m20)
+max(max_alpha_Gaussian_regression_IntractLik_m20)
+
+
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m20[[1]][,j]), ylab = "Density", xlab = paste0("$\\beta_", j,"$"), lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), ylim = c(0, 6), xlim = c(beta_0[j] - 0.5, beta_0[j] + 0.5))
+  for(i in 2:N_rep){
+    lines(density(sample_Gaussian_regression_IntractLik_m5[[i]][,j]), lwd = 3)
+  }
+  abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m20[[1]][,9]), ylab = "Density", xlab = "$\\log(\\sigma)$", lwd = 3, main= paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(-0.25, 0.75), ylim = c(0, 6))
+for(i in 2:N_rep){
+  lines(density(sample_Gaussian_regression_IntractLik_m20[[i]][,9]), lwd = 3)
+}
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m20[[1]][,9])), ylab = "Density", xlab = "$\\sigma^2$", lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(0.5, 2.5), ylim = c(0, 2.5))
+for(i in 2:N_rep){
+  lines(density(exp(2*sample_Gaussian_regression_IntractLik_m20[[i]][,9])), lwd = 3)
+}
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+
+```
+
+```{r student_generator_loc_scale_skeleton_m20_n500_rep_diag_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+for(j in 1:p){
+  plot(density(sample_Gaussian_regression_IntractLik_m20[[1]][,j]), ylab = "Density", xlab = paste0("$\\beta_", j,"$"), lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), ylim = c(0, 6), xlim = c(beta_0[j] - 0.5, beta_0[j] + 0.5))
+  for(i in 2:N_rep){
+    lines(density(sample_Gaussian_regression_IntractLik_m5[[i]][,j]), lwd = 3)
+  }
+  abline(v = beta_0[j], lwd = 3, lty = 2, col = "red")
+}
+
+plot(density(sample_Gaussian_regression_IntractLik_m20[[1]][,9]), ylab = "Density", xlab = "$\\log(\\sigma)$", lwd = 3, main= paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(-0.25, 0.75), ylim = c(0, 6))
+for(i in 2:N_rep){
+  lines(density(sample_Gaussian_regression_IntractLik_m20[[i]][,9]), lwd = 3)
+}
+abline(v = 0.5*log(2*sigma_0^2), lwd = 3, lty = 2, col = "red")
+
+
+plot(density(exp(2*sample_Gaussian_regression_IntractLik_m20[[1]][,9])), ylab = "Density", xlab = "$\\sigma^2$", lwd = 3, main = paste("Gaussian regression $n = $", n, "$m =$", m), xlim = c(0.5, 2.5), ylim = c(0, 2.5))
+for(i in 2:N_rep){
+  lines(density(exp(2*sample_Gaussian_regression_IntractLik_m20[[i]][,9])), lwd = 3)
+}
+abline(v = 2*sigma_0^2, lwd = 3, lty = 2, col = "red")
+
+```
+
+
