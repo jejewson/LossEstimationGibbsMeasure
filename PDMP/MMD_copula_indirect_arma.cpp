@@ -66,7 +66,30 @@ double grad_MMD_biRBF_grad_theta_Gaussian_Copula_cpp_arma(const int& i_0, const 
   return out;
 }
 
-
+// [[Rcpp::export]]
+double MMD_biRBF_Gaussian_Copula_cpp_arma(const arma::mat& y, const arma::mat& tilde_u, const arma::vec& xi, const double& gamma){
+  int n = y.n_rows;
+  int m = tilde_u.n_rows;
+  int i;
+  int j;
+  double rho = 2.0/(1+exp(-xi(0))) - 1.0;
+  arma::mat U = zeros(m, 2);
+  double out = 0;
+  U = F_generator_Gaussian_Copula_cpp_arma(tilde_u, rho);
+  for(i = 0; i<n; i++){
+    out -= 2.0/m*arma::sum((1.0/
+      (2.0*M_PI*gamma))*exp(-arma::sum(((y.row(i) - U.each_row())%(y.row(i) - U.each_row())), 1)/(2.0*gamma)));
+  }
+  for(j = 0; j<m; j++){
+    out += (arma::sum((1.0/
+      (2.0*M_PI*gamma))*exp(-arma::sum(((U.row(j) - U.each_row())%(U.row(j) - U.each_row())), 1)/(2.0*gamma))) - (1.0/
+        (2.0*M_PI*gamma)))*1.0*n/(m*(m-1));//subtracting to deal with the j,j comparison 
+    
+  }
+  
+  
+  return out;
+}
 
 // [[Rcpp::export]]
 double grad_log_Beta_prior_cpp(const double& xi, const double& a, const double& b){
@@ -82,6 +105,107 @@ double grad_log_prior_biGaussian_copula_cpp_arma(const int& i_0, const arma::vec
   return out;
 }
 
+// modified kernel applying inv_Phi to the obs in [0,1] before applying the RBF
+
+// [[Rcpp::export]]
+arma::mat invPhi_F_generator_Gaussian_Copula_cpp_arma(const arma::mat& tilde_u, const double& rho){
+  int N = tilde_u.n_rows;
+  arma::mat U = zeros(N, 2);
+  U.col(0) = tilde_u.col(0);
+  U.col(1) = (rho*tilde_u.col(0) + sqrt(1-pow(rho, 2))*tilde_u.col(1));
+  
+  return U;
+}
+
+// [[Rcpp::export]]
+arma::vec grad_invPhi_F_generator_Gaussian_Copula_cpp_arma(const int& i_0, const arma::mat& tilde_u, const double& rho){
+  int m = tilde_u.n_rows;
+  arma::vec out = zeros(m);
+  if(i_0 == 1){
+    out = (tilde_u.col(0) - rho/(sqrt(1-pow(rho, 2)))*tilde_u.col(1));
+  }
+  
+  return out;
+}
+
+// [[Rcpp::export]]
+arma::mat InvGauCDF_cpp_arma(const arma::mat& x){
+  // v has just one row
+  // u has multiple rows
+  int m = x.n_rows;
+  int p = x.n_cols;
+  int j;
+  arma::uvec ind_INF;
+  arma::mat Phim1 = zeros(m, p);
+  NumericVector x_temp(m);
+  arma::vec x_temp2 = zeros(m);
+  
+  for(j = 0; j<p; j++){
+    NumericVector x_temp = Rcpp::qnorm(NumericVector(x.col(j).begin(),x.col(j).end()));
+    x_temp2  = as<arma::vec>(x_temp);
+    ind_INF = arma::find_nonfinite(x_temp2);// qnorm(1) = Inf
+    x_temp2(ind_INF) = 10000*ones(ind_INF.n_elem);
+    Phim1.col(j) = x_temp2;
+    
+  }
+  
+  return Phim1;
+}
+
+// [[Rcpp::export]]
+double grad_MMD_biRBF_invPhi_grad_theta_Gaussian_Copula_cpp_arma(const int& i_0, const arma::mat& y, const arma::mat& tilde_u, const arma::vec& xi, const double& gamma){
+  int n = y.n_rows;
+  int m = tilde_u.n_rows;
+  int i;
+  int j;
+  double rho = 2.0/(1+exp(-xi(0))) - 1.0;
+  arma::mat U = zeros(m, 2);
+  arma::mat grad_gen = zeros(m);
+  arma::mat invPhi_y = InvGauCDF_cpp_arma(y);
+  double out = 0;
+  if(i_0 == 1){
+    U = invPhi_F_generator_Gaussian_Copula_cpp_arma(tilde_u, rho);
+    grad_gen = grad_invPhi_F_generator_Gaussian_Copula_cpp_arma(1, tilde_u, rho)*2.0*exp(-xi(0))/pow((1+exp(-xi(0))), 2.0);// chain rule for the reparam of rho
+    for(i = 0; i<n; i++){
+      out -= 2.0/m*arma::sum((((invPhi_y(i, 1)-U.col(1))%grad_gen)/
+        (2.0*M_PI*pow(gamma, 2)))%exp(-arma::sum(((invPhi_y.row(i) - U.each_row())%(invPhi_y.row(i) - U.each_row())), 1)/(2.0*gamma)));
+    }
+    for(j = 0; j<m; j++){
+      out -= arma::sum((((U(j, 1)-U.col(1))%(grad_gen(j) - grad_gen))/
+        (2.0*M_PI*pow(gamma, 2)))%exp(-arma::sum(((U.row(j) - U.each_row())%(U.row(j) - U.each_row())), 1)/(2.0*gamma)))*1.0*n/(m*(m-1));
+    }
+    
+  }
+  
+  return out;
+}
+
+// [[Rcpp::export]]
+double MMD_biRBF_invPhi_Gaussian_Copula_cpp_arma(const arma::mat& y, const arma::mat& tilde_u, const arma::vec& xi, const double& gamma){
+  int n = y.n_rows;
+  int m = tilde_u.n_rows;
+  int i;
+  int j;
+  double rho = 2.0/(1+exp(-xi(0))) - 1.0;
+  arma::mat U = zeros(m, 2);
+  arma::mat invPhi_y = InvGauCDF_cpp_arma(y);
+  double out = 0;
+  U = invPhi_F_generator_Gaussian_Copula_cpp_arma(tilde_u, rho);
+  for(i = 0; i<n; i++){
+    out -= 2.0/m*arma::sum((1.0/
+      (2.0*M_PI*gamma))*exp(-arma::sum(((invPhi_y.row(i) - U.each_row())%(invPhi_y.row(i) - U.each_row())), 1)/(2.0*gamma)));
+  }
+  for(j = 0; j<m; j++){
+    out += (arma::sum((1.0/
+      (2.0*M_PI*gamma))*exp(-arma::sum(((U.row(j) - U.each_row())%(U.row(j) - U.each_row())), 1)/(2.0*gamma))) - (1.0/
+        (2.0*M_PI*gamma)))*1.0*n/(m*(m-1));//subtracting to deal with the j,j comparison 
+    
+  }
+  
+  
+  return out;
+}
+
 
 // [[Rcpp::export]]
 double tilde_m_MMD_RBF_biGaussian_copula_cpp_arma(const int& i_0, const double& t, 
@@ -91,8 +215,10 @@ double tilde_m_MMD_RBF_biGaussian_copula_cpp_arma(const int& i_0, const double& 
                                                   const double& gamma, const double& w, const double& a, const double& b){
 
   double out = 0;
+  //double temp = -theta_curr(i_0-1)*grad_log_prior_biGaussian_copula_cpp_arma(i_0, xi_curr + theta_curr*t, a, b)
+  //  + theta_curr(i_0-1)*w*grad_MMD_biRBF_grad_theta_Gaussian_Copula_cpp_arma(i_0, y, tilde_u, xi_curr + theta_curr*t, gamma);
   double temp = -theta_curr(i_0-1)*grad_log_prior_biGaussian_copula_cpp_arma(i_0, xi_curr + theta_curr*t, a, b)
-    + theta_curr(i_0-1)*w*grad_MMD_biRBF_grad_theta_Gaussian_Copula_cpp_arma(i_0, y, tilde_u, xi_curr + theta_curr*t, gamma);
+    + theta_curr(i_0-1)*w*grad_MMD_biRBF_invPhi_grad_theta_Gaussian_Copula_cpp_arma(i_0, y, tilde_u, xi_curr + theta_curr*t, gamma);
   if(temp > 0){
     out = temp;
   }
