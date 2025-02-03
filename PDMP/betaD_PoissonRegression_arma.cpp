@@ -111,8 +111,11 @@ double M_betaD_poisRegression_cpp_arma(const int& i_0, const double& t, const ar
   //int n = y.n_rows;
   double out = 0;
 
-  out = arma::sum(abs(X.col(i_0 - 1)) % (y + 1.0/(beta - 1))) + abs(xi(i_0-1) - m_0)/(pow(s_0,2.0)) + t/(pow(s_0,2.0)) + 
-   exp(sum_abs_X_max*t)*(2.0*beta - 1)/(beta - 1)*sum(abs(X.col(i_0 - 1)) % exp(X*theta));
+  //out = arma::sum(abs(X.col(i_0 - 1)) % (y + 1.0/(beta - 1))) + abs(xi(i_0-1) - m_0)/(pow(s_0,2.0)) + t/(pow(s_0,2.0)) + 
+  // exp(sum_abs_X_max*t)*(2.0*beta - 1)/(beta - 1)*sum(abs(X.col(i_0 - 1)) % exp(X*theta));
+  out = (arma::sum(abs(X.col(i_0 - 1)) % (y + 1.0/(beta - 1))) + abs(xi(i_0-1) - m_0)/(pow(s_0,2.0)) + t/(pow(s_0,2.0)) + 
+    exp(sum_abs_X_max*t)*(2.0*beta - 1)/(beta - 1)*sum(abs(X.col(i_0 - 1)) % exp(X*theta)))/10.0;// improving efficiency 
+  
   return out;
   
 }
@@ -139,17 +142,19 @@ arma::vec sim_M_betaD_poisRegression_cpp_arma(const arma::vec& theta,
   //double sum_abs_X_max = arma::max(X*theta);
   for(i=0; i<p; i++){
     // Location
-    a = arma::sum(abs(X.col(i)) % (y + 1.0/(beta - 1))) + abs(xi(i) - m_0)/(pow(s_0,2.0));
-    
-    b = pow(s_0, -2);
+    //a = arma::sum(abs(X.col(i)) % (y + 1.0/(beta - 1))) + abs(xi(i) - m_0)/(pow(s_0,2.0));
+    //b = pow(s_0, -2);
+    a = (arma::sum(abs(X.col(i)) % (y + 1.0/(beta - 1))) + abs(xi(i) - m_0)/(pow(s_0,2.0)))/10.0; // Improving efficiency
+    b = pow(s_0, -2)/10.0; // Improving efficiency
     
     // Cinlars Method
     s1 = -log(R::runif(0, 1));
     tau_1 = (sqrt(pow(a, 2) + 2.0*b*s1) - a)/b;
     
     s2 = -log(R::runif(0, 1));
-    tau_2 = log(1.0 + s2*sum_abs_X_max/((2.0*beta - 1)/(beta - 1)*sum(abs(X.col(i)) % exp(X*theta))))/sum_abs_X_max;
-  
+    //tau_2 = log(1.0 + s2*sum_abs_X_max/((2.0*beta - 1)/(beta - 1)*sum(abs(X.col(i)) % exp(X*theta))))/sum_abs_X_max;
+    tau_2 = log(1.0 + s2*sum_abs_X_max*10.0/((2.0*beta - 1)/(beta - 1)*sum(abs(X.col(i)) % exp(X*theta))))/sum_abs_X_max; // Imprving efficiency
+    
 
     tau(i) = arma::min(arma::vec({tau_1, tau_2}));
   }

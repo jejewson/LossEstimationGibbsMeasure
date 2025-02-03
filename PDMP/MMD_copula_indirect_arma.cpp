@@ -234,7 +234,8 @@ double M_MMD_RBF_biGaussian_copula_cpp_arma(const int& i_0, const double& t, con
   int n = y.n_rows;
   double out = 0;
   if(i_0 == 1){
-    out = max(a, b) + 4.0*R*n*w/(pow((2.0*M_PI*gamma),1.5))*exp(-0.5)*3.0;
+    //out = max(a, b) + 4.0*R*n*w/(pow((2.0*M_PI*gamma),1.5))*exp(-0.5)*3.0;
+    out = (max(a, b) + 4.0*R*n*w/(pow((2.0*M_PI*gamma),1.5))*exp(-0.5)*3.0)/10.0;// improveing efficieny 
   }
   return out;
   
@@ -257,7 +258,8 @@ arma::vec sim_M_MMD_RBF_biGaussian_copula_cpp_arma(const arma::vec& theta, const
     
     // Cinlars Method
     s_1 = -log(R::runif(0, 1));
-    tau_1 = s_1/(max(a, b) + 12.0*R*n*w/(pow((2.0*M_PI*gamma),1.5))*exp(-0.5));
+    //tau_1 = s_1/(max(a, b) + 12.0*R*n*w/(pow((2.0*M_PI*gamma),1.5))*exp(-0.5));
+    tau_1 = s_1*10.0/(max(a, b) + 12.0*R*n*w/(pow((2.0*M_PI*gamma),1.5))*exp(-0.5));// improving efficiency
     
     tau(i) = tau_1;
     
