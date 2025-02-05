@@ -112,9 +112,9 @@ double M_betaD_poisRegression_cpp_arma(const int& i_0, const double& t, const ar
   double out = 0;
 
   //out = arma::sum(abs(X.col(i_0 - 1)) % (y + 1.0/(beta - 1))) + abs(xi(i_0-1) - m_0)/(pow(s_0,2.0)) + t/(pow(s_0,2.0)) + 
-  // exp(sum_abs_X_max*t)*(2.0*beta - 1)/(beta - 1)*sum(abs(X.col(i_0 - 1)) % exp(X*theta));
+  // exp(sum_abs_X_max*t)*(beta)/(beta - 1)*sum(abs(X.col(i_0 - 1)) % exp(X*xi));
   out = (arma::sum(abs(X.col(i_0 - 1)) % (y + 1.0/(beta - 1))) + abs(xi(i_0-1) - m_0)/(pow(s_0,2.0)) + t/(pow(s_0,2.0)) + 
-    exp(sum_abs_X_max*t)*(2.0*beta - 1)/(beta - 1)*sum(abs(X.col(i_0 - 1)) % exp(X*theta)))/10.0;// improving efficiency 
+    exp(sum_abs_X_max*t)*(beta)/(beta - 1)*sum(abs(X.col(i_0 - 1)) % exp(X*xi)))/10.0;// improving efficiency 
   
   return out;
   
@@ -152,8 +152,8 @@ arma::vec sim_M_betaD_poisRegression_cpp_arma(const arma::vec& theta,
     tau_1 = (sqrt(pow(a, 2) + 2.0*b*s1) - a)/b;
     
     s2 = -log(R::runif(0, 1));
-    //tau_2 = log(1.0 + s2*sum_abs_X_max/((2.0*beta - 1)/(beta - 1)*sum(abs(X.col(i)) % exp(X*theta))))/sum_abs_X_max;
-    tau_2 = log(1.0 + s2*sum_abs_X_max*10.0/((2.0*beta - 1)/(beta - 1)*sum(abs(X.col(i)) % exp(X*theta))))/sum_abs_X_max; // Imprving efficiency
+    //tau_2 = log(1.0 + s2*sum_abs_X_max/((beta)/(beta - 1)*sum(abs(X.col(i)) % exp(X*xi))))/sum_abs_X_max;
+    tau_2 = log(1.0 + s2*sum_abs_X_max*10.0/((beta)/(beta - 1)*sum(abs(X.col(i)) % exp(X*xi))))/sum_abs_X_max; // Imprving efficiency
     
 
     tau(i) = arma::min(arma::vec({tau_1, tau_2}));
