@@ -27,7 +27,11 @@ library(actuar)
 library(metRology)
 library(LaplacesDemon)
 
+library(rstan)
+rstan_options(auto_write = TRUE)
+
 library(mvtnorm)
+library(numDeriv)
 ```
 
 
@@ -41,6 +45,242 @@ setwd(my_dir)
 sourceCpp("betaD_PoissonRegression_arma.cpp")
 ```
 
+### stan
+
+```{r stan, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+setwd(my_dir)
+
+#http://discourse.mc-stan.org/t/stan-recompile-to-avoid-r-from-crashing/2631
+betaBayes_Poisson_linearmodel_stan <- stan_model(file="betaBayes_Poisson_linearmodel.stan")
+
+
+```
+
+### betaD
+
+
+```{r betaD, include=TRUE, echo=TRUE, eval=FALSE, cache=FALSE}
+
+dpoisRegression <- function(y, X, theta, log){
+  Xtheta <- X%*%theta
+  if(log){
+    out <- y*Xtheta - exp(Xtheta) - lfactorial(y)
+  }
+  if(!log){
+    out <- exp(y*Xtheta - exp(Xtheta) - lfactorial(y))
+  }
+  return(out)
+}
+
+set.seed(1)
+
+n <- 100
+p <- 4
+X <- matrix(rnorm(n*p, 0, 1), nrow = n, ncol = p)
+theta <- c(1.3, -0.2, 0.7, -2.1)
+
+y <- rpois(n, lambda = exp(X%*%theta))
+
+sum(dpoisRegression(y, X, theta, log = TRUE))
+sum(log(dpoisRegression(y, X, theta, log = FALSE)))
+sum(dpois(y, lambda = exp(X%*%theta), log = TRUE))
+
+#sum(abs(dpoisRegression(y, X, theta, log = FALSE) - dpoisRegression_vec_cpp_arma(y, X, theta)))
+
+dpoisRegression(y[1], X[1,], theta, log = FALSE)
+dpoisRegression_cpp_arma(y[1], X[1,], theta)
+dpoisRegression_vec_cpp_arma(y[1], X[1,], theta)
+
+dpoisRegression(y[4], X[4,], theta, log = FALSE)
+dpoisRegression_cpp_arma(y[4], X[4,], theta)
+dpoisRegression(y[5], X[4,], theta, log = FALSE)
+dpoisRegression_vec_cpp_arma(y[4:5], X[4,], theta)
+
+
+grad_log_dpoisRegression <- function(y, X, theta){
+  n <- length(y)
+  #if(length(y) == 1){
+  if(is.null(dim(X))){
+    p <- length(X)
+  } else{
+    p <- ncol(X)
+  }
+  out <- matrix(NA, nrow = n, ncol = p)
+  for(j in 1:p){
+    out[,j] <- X[,j]*c(y - c(exp(X%*%theta)))
+  }
+  
+  return(out)
+}
+
+grad_log_dpoisRegression(y[1:10], X[1:10,], theta)
+
+grad(function(theta){dpoisRegression(y[1], X[1,], theta, log = TRUE)}, theta)
+grad(function(theta){dpoisRegression(y[4], X[4,], theta, log = TRUE)}, theta)
+
+sum(abs(grad_log_dpoisRegression(y, X, theta) - grad_log_dpoisRegression_cpp_arma(y, X, theta)))
+
+grad_dpoisRegression <- function(y, X, theta){
+  n <- length(y)
+  Xtheta <- X%*%theta
+  #if(length(y) == 1){
+  if(is.null(dim(X))){
+    p <- length(X)
+  } else{
+    p <- ncol(X)
+  }
+  out <- matrix(NA, nrow = n, ncol = p)
+  for(j in 1:p){
+    out[,j] <- X[,j]*((y - exp(Xtheta))*exp(y*Xtheta - exp(Xtheta) - lfactorial(y)))
+  }
+  
+  return(out)
+}
+
+grad_dpoisRegression(y[1:10], X[1:10,], theta)
+
+grad(function(theta){dpoisRegression(y[1], X[1,], theta, log = FALSE)}, theta)
+grad(function(theta){dpoisRegression(y[4], X[4,], theta, log = FALSE)}, theta)
+
+#sum(abs(grad_dpoisRegression(y, X, theta) - grad_dpoisRegression_cpp_arma(y, X, theta)))
+
+betaD_loss_poisRegression <- function(y, X, theta, beta, trunc = 100){
+  
+  n <- length(y)
+  out <- rep(NA, n)
+  for(i in 1:n){
+    out[i] <- 1/beta*sum(dpois(0:trunc, exp(X[i,]%*%theta))^beta) - 1/(beta - 1)*dpois(y[i], exp(X[i,]%*%theta))^(beta - 1)
+  }
+  
+  return(out)
+}
+
+grad_betaD_loss_poisRegression <- function(y, X, theta, beta, trunc = 100){
+  
+  n <- length(y)
+  p <- ncol(X)
+  out <- matrix(NA, nrow = n, ncol = p)
+  for(i in 1:n){
+    out[i,] <- colSums(matrix(dpois(0:trunc, exp(X[i,]%*%theta))^beta, nrow = trunc+1, ncol = p, byrow = FALSE)*grad_log_dpoisRegression(0:trunc, array(X[i,], dim = c(1, p)), theta)) - dpois(y[i], exp(X[i,]%*%theta))^(beta - 2)*grad_dpoisRegression(y[i], array(X[i,], dim = c(1, p)), theta)
+  }
+  
+  return(out)
+}
+
+beta <- 1.5
+
+grad_betaD_loss_poisRegression(y[c(1, 4)], X[c(1, 4),], theta, beta, trunc = 1000)
+
+grad(function(theta){betaD_loss_poisRegression(y[1], array(X[1,], dim = c(1, p)), theta, beta, trunc = 1000)}, theta)
+grad(function(theta){betaD_loss_poisRegression(y[4], array(X[4,], dim = c(1, p)), theta, beta, trunc = 1000)}, theta)
+
+dpoisRegression_vec_cpp_arma(y[1:5], X[1,], theta)
+
+grad_betaD_loss_poisRegressionOneObs_cpp_arma(1, y[1], y[2:5], X[1,], theta, beta)
+
+
+
+```
+
+## Computational Bounds
+
+```{r ComputationalBounds, include=TRUE, echo=TRUE, eval=FALSE, cache=FALSE}
+
+
+term <- function(y, beta, Xtheta){
+  return(exp((beta-1)*y*Xtheta - (beta-1)*exp(Xtheta) - (beta - 1)*lfactorial(y))*(y-exp(Xtheta)))
+}
+
+beta <- 1.5
+y <- 5
+Xtheta_seq <- seq(-10, 10, length.out = 1000)
+
+plot(Xtheta_seq, term(y, beta, Xtheta_seq))
+abline(v = log((2*y*(beta - 1) + 1) + sqrt(4*y*(beta-1) + 1)/(2*(beta-1))), lwd = 2, lty = 2, col = "red")
+abline(v = log((2*y*(beta - 1) + 1) - sqrt(4*y*(beta-1) + 1)/(2*(beta-1))), lwd = 2, lty = 2, col = "red")
+
+y_seq <- seq(0, 10000, length.out = 10001)
+
+
+plot(y_seq, pmax(term(y_seq, beta, Xtheta = log((2*y_seq*(beta - 1) + 1) + sqrt(4*y_seq*(beta-1) + 1)/(2*(beta-1)))), term(y_seq, beta, Xtheta = log((2*y_seq*(beta - 1) + 1) - sqrt(4*y_seq*(beta-1) + 1)/(2*(beta-1))))))
+
+
+## This is all hat matters 
+lambda <- 5
+u_seq <- 0:5000
+
+beta <- 2
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.5
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.1
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.01
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.001
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+lambda <- 0.5
+u_seq <- 0:5000
+
+beta <- 2
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.5
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.1
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.01
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.001
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+
+
+lambda <- 500
+u_seq <- 0:50000
+
+beta <- 2
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.5
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.1
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.01
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+beta <- 1.001
+plot(u_seq, exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE)), type = "l")
+sum((exp(log(u_seq) + (beta - 1)*dpois(u_seq, lambda, log = TRUE))) > (lambda+1)/(beta-1))
+
+
+```
+
 # Poisson Regression Data - n = 100 {.tabset}
 
 ## Data
@@ -48,17 +288,20 @@ sourceCpp("betaD_PoissonRegression_arma.cpp")
 ```{r data_poisson_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
 set.seed(1)
 
-
+N_rep <- 1
 
 p <- 5
 
 theta <- c(1, 0.5, 1.5, 0, 0)
 
 n <- 100
+#n <- 5000
 
 X <- cbind(1, matrix(rnorm(n*(p-1), 0, 0.25), nrow = n, ncol = p-1))
 
 y <- rpois(n, exp(X%*%theta))
+
+max(rowSums(abs(X)))
 
 ```
 
@@ -71,7 +314,48 @@ s_0 <- 1
 
 ```
 
+## Stan with truncation
+
+I got terrible inference for T = 100 as we have up to y = 9500 here
+
+With T = 2000, this now takes a long time
+
+```{r betaD_PoissonRegression_stan_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+iterations <- 1000
+warmup <- 1000
+
+betaBayes_Poisson_linearmodel_data <- list(n = n, p = p, y = matrix(y, nrow = n, ncol = 1), X = X, mu_beta = m_0, beta_s = s_0^2, w = 1.5, beta_p = 0.5, T = 2000, T_vect = 0:2000)
+
+betaBayes_Poisson_linearmodel <- sampling(object = betaBayes_Poisson_linearmodel_stan, data = betaBayes_Poisson_linearmodel_data, iter = iterations + warmup, warmup = warmup, chains = 1, cores = 1
+      #, control = list(adapt_delta = 0.95)#, stepsize = 0.01))
+      , init = list(c1 = list(beta = rep(0, p)))
+)
+betaBayes_Poisson_linearmodel_params <- extract(betaBayes_Poisson_linearmodel)
+
+```
+
+```{r betaD_PoissonRegression_stan_diag_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+get_elapsed_time(betaBayes_Poisson_linearmodel)
+
+for(j in 1:p){
+  plot(density(betaBayes_Poisson_linearmodel_params$beta[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+ESS(betaBayes_Poisson_linearmodel_params$beta)
+
+```
+
 ## PDMP 
+
+### Calibration Weight
+
+```{r calibration_weight_betaD_PoissonRegression_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+```
 
 ### set-up 
 
@@ -87,7 +371,8 @@ sum_abs_X_max <- max(rowSums(abs(X)))
 
 m <- 5
 
-T_end <- 1000
+T_end <- 1000*sqrt(100)/sqrt(n)
+#T_end <- 1000
 #T_end <- 5000
 xi_0 <- rep(0, p)
 theta_0 <- rep(1, p)
@@ -112,7 +397,7 @@ skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$mean_alpha
 
 for(j in 1:p){
   plot(density(sample_betaD_PoissonRegression_m5_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
-
+  lines(density(betaBayes_Poisson_linearmodel_params$beta[,j]), lwd = 3, col = "grey")
   abline(v = theta[j], lwd = 3, lty = 2, col = "red")
 }
 
@@ -152,7 +437,7 @@ skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$mean_alpha
 
 for(j in 1:p){
   plot(density(sample_betaD_PoissonRegression_m20_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
-
+  lines(density(betaBayes_Poisson_linearmodel_params$beta[,j]), lwd = 3, col = "grey")
   abline(v = theta[j], lwd = 3, lty = 2, col = "red")
 }
 
@@ -192,7 +477,7 @@ skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$mean_alpha
 
 for(j in 1:p){
   plot(density(sample_betaD_PoissonRegression_m50_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
-
+  lines(density(betaBayes_Poisson_linearmodel_params$beta[,j]), lwd = 3, col = "grey")
   abline(v = theta[j], lwd = 3, lty = 2, col = "red")
 }
 
@@ -235,7 +520,7 @@ abline(v = theta[j], lwd = 3, lty = 2, col = "red")
 ```{r data_poisson_n100_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
 set.seed(1)
 
-
+N_rep <- 1
 
 p <- 5
 
@@ -470,7 +755,7 @@ for(j in 2:p){
 ```{r data_poisson_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
 set.seed(1)
 
-
+N_rep <- 1
 
 p <- 5
 
@@ -493,7 +778,48 @@ s_0 <- 1
 
 ```
 
+## Stan with truncation
+
+I got terrible inference for T = 100 as we have up to y = 9500 here
+
+With T = 2000, this now takes a long time
+
+```{r betaD_PoissonRegression_stan_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+iterations <- 1000
+warmup <- 1000
+
+betaBayes_Poisson_linearmodel_data <- list(n = n, p = p, y = matrix(y, nrow = n, ncol = 1), X = X, mu_beta = m_0, beta_s = s_0^2, w = 1, beta_p = 0.5, T = 2000, T_vect = 0:2000)
+
+betaBayes_Poisson_linearmodel <- sampling(object = betaBayes_Poisson_linearmodel_stan, data = betaBayes_Poisson_linearmodel_data, iter = iterations + warmup, warmup = warmup, chains = 1, cores = 1
+      #, control = list(adapt_delta = 0.95)#, stepsize = 0.01))
+      , init = list(c1 = list(beta = rep(0, p)))
+)
+betaBayes_Poisson_linearmodel_params <- extract(betaBayes_Poisson_linearmodel)
+
+```
+
+```{r betaD_PoissonRegression_stan_diag_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+get_elapsed_time(betaBayes_Poisson_linearmodel)
+
+for(j in 1:p){
+  plot(density(betaBayes_Poisson_linearmodel_params$beta[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
+  abline(v = theta[j], lwd = 3, lty = 2, col = "red")
+}
+
+
+ESS(betaBayes_Poisson_linearmodel_params$beta)
+
+```
+
 ## PDMP 
+
+### Calibration Weight
+
+```{r calibration_weight_betaD_PoissonRegression_n500, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+```
 
 ### set-up 
 
@@ -536,7 +862,7 @@ skeleton_betaD_PoissonRegression_IntractLik_m5_rcpp$mean_alpha
 
 for(j in 1:p){
   plot(density(sample_betaD_PoissonRegression_m5_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
-
+  lines(density(betaBayes_Poisson_linearmodel_params$beta[,j]), lwd = 3, col = "grey")
   abline(v = theta[j], lwd = 3, lty = 2, col = "red")
 }
 
@@ -576,7 +902,7 @@ skeleton_betaD_PoissonRegression_IntractLik_m20_rcpp$mean_alpha
 
 for(j in 1:p){
   plot(density(sample_betaD_PoissonRegression_m20_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
-
+  lines(density(betaBayes_Poisson_linearmodel_params$beta[,j]), lwd = 3, col = "grey")
   abline(v = theta[j], lwd = 3, lty = 2, col = "red")
 }
 
@@ -616,7 +942,7 @@ skeleton_betaD_PoissonRegression_IntractLik_m50_rcpp$mean_alpha
 
 for(j in 1:p){
   plot(density(sample_betaD_PoissonRegression_m50_rcpp[,j]), ylab = "Density", xlab = paste0("theta", j), lwd = 3, main = paste("betaD-Poisson Regression"))
-
+  lines(density(betaBayes_Poisson_linearmodel_params$beta[,j]), lwd = 3, col = "grey")
   abline(v = theta[j], lwd = 3, lty = 2, col = "red")
 }
 
@@ -657,7 +983,7 @@ abline(v = theta[j], lwd = 3, lty = 2, col = "red")
 ```{r data_poisson_n500_rep, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
 set.seed(1)
 
-
+N_rep <- 1
 
 p <- 5
 
