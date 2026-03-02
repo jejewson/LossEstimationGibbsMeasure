@@ -1,0 +1,589 @@
+---
+title: "PDMPs for MMD SBI with g-and-k distribution"
+author: "Jack Jewson"
+date: "19 Feb 2026"
+output: html_document
+---
+
+## Preamble {.tabset}
+
+### Working directory
+
++ Change this to be the directory that the stan files are saved in 
+
+```{r setwd, include=TRUE,echo=TRUE, eval=TRUE,cache=TRUE}
+
+my_dir <- "C:/Users/jjew0003/Documents/Monash_Yr1/PDMPs_IntractableLikelihood/"
+
+
+```
+
+### Packages
+
+Loading the required packages.
+
+```{r packages, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(actuar)
+library(metRology)
+library(LaplacesDemon)
+
+setwd(my_dir)
+
+source("gandk/gandk.R")
+
+source("gandk/median_heuristic.R")
+
+library(dplyr)
+library(ggplot2)
+```
+
+
+### RCPP
+
+```{r RCPP, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(Rcpp)
+
+setwd(my_dir)
+
+sourceCpp("gandk/MMD_arma_gandkV2.cpp")
+```
+
+### Transformations and the prior
+
+I am worried that big distances are requires in $\xi$ in order to get a meaningful change in $\theta$
+
+```{r}
+
+xi_seq <- seq(-10, 10, length.out = 1000)
+
+plot(xi_seq, exp(xi_seq)/((1+exp(xi_seq))^2), type = "l", xlab = "Xi", ylab = "Density")
+
+
+plot(xi_seq, 5.0 / (1.0 + exp(-xi_seq)), xlab = "xi", ylab = "theta", type = "l")
+
+
+```
+
+
+# n = 100 {.tabset}
+
+## Data generation
+
+```{r data_sim_gandk_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(123)
+n <- 100
+true_a <- 1.0
+true_b <- 1.0
+true_g <- 1.0
+true_k <- 0.5
+
+# Generate data using the R function
+sim_data <- simulate_gandk_with_gradient(n, c(true_a, true_b, true_g, true_k))
+y <- sim_data$samples
+```
+
+## PDMP 
+
+### set-up 
+
+```{r gandk_setup_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+# Sampler parameters
+gamma <- median_heuristic(cbind(y,y))
+m <- 5 # Number of synthetic samples
+T_end <- 5000
+#T_end <- 100
+w <- sqrt(2*pi)
+
+# Helper function to transform from [0,5] to unconstrained
+transform_to_unconstrained <- function(theta) {
+  # θ = 5/(1+exp(-ξ)) => ξ = log(θ/(5-θ))
+  log(theta / (5 - theta))
+}
+
+# Initial values on unconstrained scale
+# Start near the middle of [0,5], e.g., at 2.5 for each parameter
+xi_0 <- c(
+  transform_to_unconstrained(1),  # a
+  transform_to_unconstrained(1),  # b
+  transform_to_unconstrained(1.0),  # g
+  transform_to_unconstrained(1.0)   # k
+)
+
+theta_0 <- c(1, 1, 1, 1)  # Initial velocities
+
+```
+
+## m = 5 (Rcpp)
+
+```{r gandk_skeleton_m5_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+
+timer_MMD_gandk_m5.start <- Sys.time()
+skeleton_gandk_IntractLik_m5 <- ZigZag_MMD_RBF_gandk_cpp_arma(T_end, xi_0, theta_0, y, m, gamma, w = w, N_skeleton = 100000)
+timer_MMD_gandk_m5.end <- Sys.time()
+
+sample_gandk_IntractLik_m5 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_gandk_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_gandk_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_gandk_IntractLik_m5$skeleton_Theta, N = 1000)
+
+
+sample_gandk_IntractLik_m5_theta <- transform_samples_to_original_scale(sample_gandk_IntractLik_m5)
+
+
+```
+
+```{r gandk_m5_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_gandk_m5.end, timer_MMD_gandk_m5.start, units = "mins")
+
+skeleton_gandk_IntractLik_m5$max_alpha
+skeleton_gandk_IntractLik_m5$mean_alpha
+
+## Unconstrained trace plots
+
+plot(skeleton_gandk_IntractLik_m5$skeleton_T, skeleton_gandk_IntractLik_m5$skeleton_Xi[,1], type = "l", xlab = "T", ylab = "xi_a")
+
+plot(skeleton_gandk_IntractLik_m5$skeleton_T, skeleton_gandk_IntractLik_m5$skeleton_Xi[,2], type = "l", xlab = "T", ylab = "xi_b")
+
+plot(skeleton_gandk_IntractLik_m5$skeleton_T, skeleton_gandk_IntractLik_m5$skeleton_Xi[,3], type = "l", xlab = "T", ylab = "xi_g")
+
+plot(skeleton_gandk_IntractLik_m5$skeleton_T, skeleton_gandk_IntractLik_m5$skeleton_Xi[,4], type = "l", xlab = "T", ylab = "xi_k")
+
+## Constrained trace plots
+
+plot(skeleton_gandk_IntractLik_m5$skeleton_T, transform_to_bounded_vec(skeleton_gandk_IntractLik_m5$skeleton_Xi[,1]), type = "l", xlab = "T", ylab = "a")
+
+plot(skeleton_gandk_IntractLik_m5$skeleton_T, transform_to_bounded_vec(skeleton_gandk_IntractLik_m5$skeleton_Xi[,2]), type = "l", xlab = "T", ylab = "b")
+
+plot(skeleton_gandk_IntractLik_m5$skeleton_T, transform_to_bounded_vec(skeleton_gandk_IntractLik_m5$skeleton_Xi[,3]), type = "l", xlab = "T", ylab = "g")
+
+plot(skeleton_gandk_IntractLik_m5$skeleton_T, transform_to_bounded_vec(skeleton_gandk_IntractLik_m5$skeleton_Xi[,4]), type = "l", xlab = "T", ylab = "k")
+
+
+## Density plots
+
+plot(density(sample_gandk_IntractLik_m5_theta[,1]), ylab = "Density", xlab = paste0("a"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_a, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m5_theta[,2]), ylab = "Density", xlab = paste0("b"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_b, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m5_theta[,3]), ylab = "Density", xlab = paste0("g"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_g, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m5_theta[,4]), ylab = "Density", xlab = paste0("k"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_k, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_gandk_IntractLik_m5_theta[,1])
+ESS(sample_gandk_IntractLik_m5_theta[,2])
+ESS(sample_gandk_IntractLik_m5_theta[,3])
+ESS(sample_gandk_IntractLik_m5_theta[,4])
+```
+
+## m = 20 (Rcpp)
+
+```{r gandk_skeleton_m20_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+
+timer_MMD_gandk_m20.start <- Sys.time()
+skeleton_gandk_IntractLik_m20 <- ZigZag_MMD_RBF_gandk_cpp_arma(T_end, xi_0, theta_0, y, m, gamma, w = w, N_skeleton = 100000)
+timer_MMD_gandk_m20.end <- Sys.time()
+
+sample_gandk_IntractLik_m20 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_gandk_IntractLik_m20$skeleton_T, skeleton_Xi = skeleton_gandk_IntractLik_m20$skeleton_Xi, skeleton_Theta = skeleton_gandk_IntractLik_m20$skeleton_Theta, N = 1000)
+
+
+sample_gandk_IntractLik_m20_theta <- transform_samples_to_original_scale(sample_gandk_IntractLik_m20)
+
+
+```
+
+```{r gandk_m20_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_gandk_m20.end, timer_MMD_gandk_m20.start, units = "mins")
+
+skeleton_gandk_IntractLik_m20$max_alpha
+skeleton_gandk_IntractLik_m20$mean_alpha
+
+plot(density(sample_gandk_IntractLik_m20_theta[,1]), ylab = "Density", xlab = paste0("a"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_a, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m20_theta[,2]), ylab = "Density", xlab = paste0("b"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_b, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m20_theta[,3]), ylab = "Density", xlab = paste0("g"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_g, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m20_theta[,4]), ylab = "Density", xlab = paste0("k"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_k, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_gandk_IntractLik_m20_theta[,1])
+ESS(sample_gandk_IntractLik_m20_theta[,2])
+ESS(sample_gandk_IntractLik_m20_theta[,3])
+ESS(sample_gandk_IntractLik_m20_theta[,4])
+```
+
+## m = 50  (Rcpp)
+
+```{r gandk_skeleton_m50_n100, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 50
+
+
+timer_MMD_gandk_m50.start <- Sys.time()
+skeleton_gandk_IntractLik_m50 <- ZigZag_MMD_RBF_gandk_cpp_arma(T_end, xi_0, theta_0, y, m, gamma, w = w, N_skeleton = 100000)
+timer_MMD_gandk_m50.end <- Sys.time()
+
+sample_gandk_IntractLik_m50 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_gandk_IntractLik_m50$skeleton_T, skeleton_Xi = skeleton_gandk_IntractLik_m50$skeleton_Xi, skeleton_Theta = skeleton_gandk_IntractLik_m50$skeleton_Theta, N = 1000)
+
+
+sample_gandk_IntractLik_m50_theta <- transform_samples_to_original_scale(sample_gandk_IntractLik_m50)
+
+
+```
+
+```{r gandk_m50_n100_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+difftime(timer_MMD_gandk_m50.end, timer_MMD_gandk_m50.start, units = "mins")
+
+skeleton_gandk_IntractLik_m50$max_alpha
+skeleton_gandk_IntractLik_m50$mean_alpha
+
+plot(density(sample_gandk_IntractLik_m50_theta[,1]), ylab = "Density", xlab = paste0("a"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_a, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m50_theta[,2]), ylab = "Density", xlab = paste0("b"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_b, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m50_theta[,3]), ylab = "Density", xlab = paste0("g"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_g, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m50_theta[,4]), ylab = "Density", xlab = paste0("k"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_k, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_gandk_IntractLik_m50_theta[,1])
+ESS(sample_gandk_IntractLik_m50_theta[,2])
+ESS(sample_gandk_IntractLik_m50_theta[,3])
+ESS(sample_gandk_IntractLik_m50_theta[,4])
+```
+
+```{r gandk_n100_comparison, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+m5_df <- as.data.frame(sample_gandk_IntractLik_m5_theta) |> 
+  mutate(m = rep(5, nrow(sample_gandk_IntractLik_m5_theta))) |>
+  rename(a = V1, 
+         b = V2, 
+         g = V3, 
+         k = V4)
+
+m20_df <- as.data.frame(sample_gandk_IntractLik_m20_theta) |> 
+  mutate(m = rep(20, nrow(sample_gandk_IntractLik_m20_theta))) |>
+  rename(a = V1, 
+         b = V2, 
+         g = V3, 
+         k = V4)
+
+m50_df <- as.data.frame(sample_gandk_IntractLik_m50_theta) |> 
+  mutate(m = rep(50, nrow(sample_gandk_IntractLik_m50_theta))) |>
+  rename(a = V1, 
+         b = V2, 
+         g = V3, 
+         k = V4)
+
+m_comp_df <- bind_rows(m5_df, m20_df, m50_df)
+
+m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = a, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_vline(xintercept = true_a) +
+  ggtitle(paste0("g-and-k distribution n = ", n))
+
+m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = b, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_vline(xintercept = true_b) +
+  ggtitle(paste0("g-and-k distribution n = ", n))
+
+m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = g, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_vline(xintercept = true_g) +
+  ggtitle(paste0("g-and-k distribution n = ", n))
+
+m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = k, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_vline(xintercept = true_k) +
+  ggtitle(paste0("g-and-k distribution n = ", n))
+
+
+
+
+```
+
+```{r gandk_n100_comparison_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+
+```
+
+
+# n = 1000 {.tabset}
+
+## Data generation
+
+```{r data_sim_gandk_n1000, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+set.seed(123)
+n <- 1000
+true_a <- 1.0
+true_b <- 1.0
+true_g <- 1.0
+true_k <- 0.5
+
+# Generate data using the R function
+sim_data <- simulate_gandk_with_gradient(n, c(true_a, true_b, true_g, true_k))
+y <- sim_data$samples
+```
+
+## PDMP 
+
+### set-up 
+
+```{r gandk_setup_n1000, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+# Sampler parameters
+gamma <- median_heuristic(cbind(y,y))
+m <- 5 # Number of synthetic samples
+T_end <- 1000
+w <- sqrt(2*pi)
+
+# Helper function to transform from [0,5] to unconstrained
+transform_to_unconstrained <- function(theta) {
+  # θ = 5/(1+exp(-ξ)) => ξ = log(θ/(5-θ))
+  log(theta / (5 - theta))
+}
+
+# Initial values on unconstrained scale
+# Start near the middle of [0,5], e.g., at 2.5 for each parameter
+xi_0 <- c(
+  transform_to_unconstrained(1),  # a
+  transform_to_unconstrained(1),  # b
+  transform_to_unconstrained(1.0),  # g
+  transform_to_unconstrained(1.0)   # k
+)
+
+theta_0 <- c(1, 1, 1, 1)  # Initial velocities
+
+```
+
+## m = 5 (Rcpp)
+
+```{r gandk_skeleton_m5_n1000, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+
+timer_MMD_gandk_m5.start <- Sys.time()
+skeleton_gandk_IntractLik_m5 <- ZigZag_MMD_RBF_gandk_cpp_arma(T_end, xi_0, theta_0, y, m, gamma, w = w, N_skeleton = 100000)
+timer_MMD_gandk_m5.end <- Sys.time()
+
+sample_gandk_IntractLik_m5 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_gandk_IntractLik_m5$skeleton_T, skeleton_Xi = skeleton_gandk_IntractLik_m5$skeleton_Xi, skeleton_Theta = skeleton_gandk_IntractLik_m5$skeleton_Theta, N = 1000)
+
+
+sample_gandk_IntractLik_m5_theta <- transform_samples_to_original_scale(sample_gandk_IntractLik_m5)
+
+
+```
+
+```{r gandk_m5_n1000_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_gandk_m5.end, timer_MMD_gandk_m5.start, units = "mins")
+
+skeleton_gandk_IntractLik_m5$max_alpha
+skeleton_gandk_IntractLik_m5$mean_alpha
+
+plot(density(sample_gandk_IntractLik_m5_theta[,1]), ylab = "Density", xlab = paste0("a"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_a, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m5_theta[,2]), ylab = "Density", xlab = paste0("b"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_b, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m5_theta[,3]), ylab = "Density", xlab = paste0("g"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_g, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m5_theta[,4]), ylab = "Density", xlab = paste0("k"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_k, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_gandk_IntractLik_m5_theta[,1])
+ESS(sample_gandk_IntractLik_m5_theta[,2])
+ESS(sample_gandk_IntractLik_m5_theta[,3])
+ESS(sample_gandk_IntractLik_m5_theta[,4])
+```
+
+## m = 20 (Rcpp)
+
+```{r gandk_skeleton_m20_n1000, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+
+timer_MMD_gandk_m20.start <- Sys.time()
+skeleton_gandk_IntractLik_m20 <- ZigZag_MMD_RBF_gandk_cpp_arma(T_end, xi_0, theta_0, y, m, gamma, w = w, N_skeleton = 100000)
+timer_MMD_gandk_m20.end <- Sys.time()
+
+sample_gandk_IntractLik_m20 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_gandk_IntractLik_m20$skeleton_T, skeleton_Xi = skeleton_gandk_IntractLik_m20$skeleton_Xi, skeleton_Theta = skeleton_gandk_IntractLik_m20$skeleton_Theta, N = 1000)
+
+
+sample_gandk_IntractLik_m20_theta <- transform_samples_to_original_scale(sample_gandk_IntractLik_m20)
+
+
+```
+
+```{r gandk_m20_n1000_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_gandk_m20.end, timer_MMD_gandk_m20.start, units = "mins")
+
+skeleton_gandk_IntractLik_m20$max_alpha
+skeleton_gandk_IntractLik_m20$mean_alpha
+
+plot(density(sample_gandk_IntractLik_m20_theta[,1]), ylab = "Density", xlab = paste0("a"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_a, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m20_theta[,2]), ylab = "Density", xlab = paste0("b"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_b, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m20_theta[,3]), ylab = "Density", xlab = paste0("g"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_g, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m20_theta[,4]), ylab = "Density", xlab = paste0("k"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_k, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_gandk_IntractLik_m20_theta[,1])
+ESS(sample_gandk_IntractLik_m20_theta[,2])
+ESS(sample_gandk_IntractLik_m20_theta[,3])
+ESS(sample_gandk_IntractLik_m20_theta[,4])
+```
+
+## m = 50  (Rcpp)
+
+```{r gandk_skeleton_m50_n1000, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 50
+
+
+timer_MMD_gandk_m50.start <- Sys.time()
+skeleton_gandk_IntractLik_m50 <- ZigZag_MMD_RBF_gandk_cpp_arma(T_end, xi_0, theta_0, y, m, gamma, w = w, N_skeleton = 100000)
+timer_MMD_gandk_m50.end <- Sys.time()
+
+sample_gandk_IntractLik_m50 <- skeleton_to_sample_cpp_arma(skeleton_T = skeleton_gandk_IntractLik_m50$skeleton_T, skeleton_Xi = skeleton_gandk_IntractLik_m50$skeleton_Xi, skeleton_Theta = skeleton_gandk_IntractLik_m50$skeleton_Theta, N = 1000)
+
+
+sample_gandk_IntractLik_m50_theta <- transform_samples_to_original_scale(sample_gandk_IntractLik_m50)
+
+
+```
+
+```{r gandk_m50_n1000_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+difftime(timer_MMD_gandk_m50.end, timer_MMD_gandk_m50.start, units = "mins")
+
+skeleton_gandk_IntractLik_m50$max_alpha
+skeleton_gandk_IntractLik_m50$mean_alpha
+
+plot(density(sample_gandk_IntractLik_m50_theta[,1]), ylab = "Density", xlab = paste0("a"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_a, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m50_theta[,2]), ylab = "Density", xlab = paste0("b"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_b, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m50_theta[,3]), ylab = "Density", xlab = paste0("g"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_g, lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_gandk_IntractLik_m50_theta[,4]), ylab = "Density", xlab = paste0("k"), lwd = 3, main = paste("g-and-k"))
+abline(v = true_k, lwd = 3, lty = 2, col = "red")
+
+
+ESS(sample_gandk_IntractLik_m50_theta[,1])
+ESS(sample_gandk_IntractLik_m50_theta[,2])
+ESS(sample_gandk_IntractLik_m50_theta[,3])
+ESS(sample_gandk_IntractLik_m50_theta[,4])
+```
+
+COULD ADD N TO THESE DFS
+
+```{r gandk_n1000_comparison, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+m5_df <- as.data.frame(sample_gandk_IntractLik_m5_theta) |> 
+  mutate(m = rep(5, nrow(sample_gandk_IntractLik_m5_theta))) |>
+  rename(a = V1, 
+         b = V2, 
+         g = V3, 
+         k = V4)
+
+m20_df <- as.data.frame(sample_gandk_IntractLik_m20_theta) |> 
+  mutate(m = rep(20, nrow(sample_gandk_IntractLik_m20_theta))) |>
+  rename(a = V1, 
+         b = V2, 
+         g = V3, 
+         k = V4)
+
+m50_df <- as.data.frame(sample_gandk_IntractLik_m50_theta) |> 
+  mutate(m = rep(50, nrow(sample_gandk_IntractLik_m50_theta))) |>
+  rename(a = V1, 
+         b = V2, 
+         g = V3, 
+         k = V4)
+
+m_comp_df <- bind_rows(m5_df, m20_df, m50_df)
+
+m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = a, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_vline(xintercept = true_a) +
+  ggtitle(paste0("g-and-k distribution n = ", n))
+
+m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = b, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_vline(xintercept = true_b) +
+  ggtitle(paste0("g-and-k distribution n = ", n))
+
+m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = g, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_vline(xintercept = true_g) +
+  ggtitle(paste0("g-and-k distribution n = ", n))
+
+m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = k, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_vline(xintercept = true_k) +
+  ggtitle(paste0("g-and-k distribution n = ", n))
+
+
+
+
+```
+
+```{r gandk_n1000_comparison_tikz, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE, fig.height = 3, fig.width = 5, dev = "tikz"}
+par(mar = c(3.5, 3.8, 1.5, 1.1)) # bottom, left, top, right
+par(mgp = c(2.15, 1, 0))
+par(cex.lab = 1.25, cex.axis = 1.25, cex.main = 1.25)
+
+
+
+```
