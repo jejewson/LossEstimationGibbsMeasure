@@ -1,0 +1,1024 @@
+---
+title: "PDMPs for M/G/1 queueing models with MMD"
+author: "Jack Jewson"
+date: "13 Apr 2026"
+output: html_document
+---
+
+
+Think you can just generate one queue to compare to, lets see!
+
+## Preamble {.tabset}
+
+### Working directory
+
++ Change this to be the directory that the stan files are saved in 
+
+```{r setwd, include=TRUE,echo=TRUE, eval=TRUE,cache=TRUE}
+
+my_dir <- "C:/Users/jjew0003/Documents/Monash_Yr1/PDMPs_IntractableLikelihood/MG1"
+
+
+```
+
+### Packages
+
+Loading the required packages.
+
+```{r packages, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+library(numDeriv)
+library(LaplacesDemon)
+
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+
+setwd(my_dir)
+
+source("../gandk/median_heuristic.R")
+
+```
+
+### RCPP
+
+```{r RCPP, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+library(Rcpp)
+
+setwd(my_dir)
+
+sourceCpp("MMD_arma_mg1_V4.cpp")
+```
+
+### Functions
+
+```{r functions, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+simulate_mg1_R <- function(theta, n_obs) {
+  T_queue <- n_obs + 1
+  w <- rexp(T_queue, rate = theta[3])
+  s <- runif(T_queue, theta[1], theta[2])
+  D <- numeric(T_queue)
+  d <- 0; a <- 0
+  for (i in seq_len(T_queue)) {
+    a    <- a + w[i]
+    d    <- d + s[i] + max(0, a - d)
+    D[i] <- d
+  }
+  diff(D)
+} # This doesn't simulate in terms of the u's!
+
+## Prior on all 3 parameters is uniform!
+transform_to_xi    <- function(theta, p1, p2) log((theta - p1) / (p2 - theta))
+transform_to_theta <- function(xi, p1, p2) { ex <- exp(xi); (p2*ex + p1) / (1 + ex) }
+
+
+```
+
+
+### Debugging
+
+```{r data_gen_debug, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+set.seed(6)
+
+m <- 10
+n_obs <- 100
+
+
+tilde_u <- u_generator_mg1_cpp_arma(m, n_obs)
+
+theta1 <- 1
+theta2 <- 5
+theta3 <- 0.2
+
+p1 <- c(0, 2, 0)
+p2 <- c(2, 12, 0.5)
+
+xi <- transform_to_xi(c(theta1, theta2, theta3), p1, p2)
+
+u <- F_generator_mg1_cpp_arma(tilde_u, xi, p1, p2)
+
+plot(u[1,], type = "l")
+
+```
+
+```{r gradients, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+
+grad_F_1 <- grad_F_generator_mg1_cpp_arma(1, tilde_u, xi, p1, p2)
+
+grad_F_2 <- grad_F_generator_mg1_cpp_arma(2, tilde_u, xi, p1, p2)
+
+grad_F_3 <- grad_F_generator_mg1_cpp_arma(3, tilde_u, xi, p1, p2)
+
+m <- 3
+t <- 15
+
+grad(function(xi_theta_1){F_generator_mg1_cpp_arma(tilde_u, c(xi_theta_1, xi[2], xi[3]), p1, p2)[m, t]}, xi[1])
+grad_F_1[m, t]
+grad_F_and_samples_generator_mg1_cpp_arma(1, tilde_u, xi, p1, p2)[m, t, 2]
+
+grad(function(xi_theta_2){F_generator_mg1_cpp_arma(tilde_u, c(xi[1], xi_theta_2, xi[3]), p1, p2)[m, t]}, xi[2])
+grad_F_2[m, t]
+
+grad(function(xi_theta_3){F_generator_mg1_cpp_arma(tilde_u, c(xi[1], xi[2], xi_theta_3), p1, p2)[m, t]}, xi[3])
+grad_F_3[m, t]
+
+
+```
+
+```{r MMD_grad, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+set.seed(123)
+true_theta <- c(1, 5, 0.2)
+
+y <- simulate_mg1_R(true_theta, n_obs)
+
+gamma <- median_heuristic(cbind(y,y))
+
+MMD_RBF_vec_mg1_cpp_arma(y, tilde_u, xi, p1, p2, gamma)
+
+MMD_RBF_vec_mg1_cpp_arma(y, tilde_u, c(0, 0, 0), p1, p2, gamma)
+
+grad_MMD_RBF_mg1_cpp_arma(1, y, tilde_u, xi, p1, p2, gamma)
+grad(function(xi_theta_1){MMD_RBF_vec_mg1_cpp_arma(y, tilde_u, xi = c(xi_theta_1, xi[2], xi[3]), p1, p2, gamma)}, xi[1])
+
+grad_MMD_RBF_mg1_cpp_arma(2, y, tilde_u, xi, p1, p2, gamma)
+grad(function(xi_theta_2){MMD_RBF_vec_mg1_cpp_arma(y, tilde_u, xi = c(xi[1], xi_theta_2, xi[3]), p1, p2, gamma)}, xi[2])
+
+grad_MMD_RBF_mg1_cpp_arma(3, y, tilde_u, xi, p1, p2, gamma)
+grad(function(xi_theta_3){MMD_RBF_vec_mg1_cpp_arma(y, tilde_u, xi = c(xi[1], xi[2], xi_theta_3), p1, p2, gamma)}, xi[3])
+
+```
+
+
+```{r stopping_times, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+set.seed(7)
+
+tau_i <- sim_M_MMD_RBF_mg1_cpp_arma(n_obs, gamma, w = 1, p1, p2)
+
+tau_i
+
+```
+
+# Zig-Zag implementation
+
+
+## Data - T - 100
+
+```{r data_gen_T50, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+set.seed(123)
+true_theta <- c(1, 5, 0.2)
+n_obs      <- 50
+
+y <- simulate_mg1_R(true_theta, n_obs)
+
+plot(y, type = "l")
+
+```
+
+### Prior
+
+```{r prior_T50, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+min_y <- 1+min(y)
+p1 <- c(0,      min_y,       0  )
+p2 <- c(min_y,  10 + min_y,  0.5)
+
+cat("Prior bounds:\n")
+for (j in 1:3)
+  cat(sprintf("  theta%d ~ Uniform(%6.4f, %6.4f)\n", j, p1[j], p2[j]))
+cat("\n")
+
+true_xi <- transform_to_xi(true_theta, p1, p2)
+
+
+```
+
+
+## PDMP 
+
+### set-up 
+
+```{r setup_T50, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+gamma   <- median_heuristic(matrix(y, ncol = 1))
+w <- sqrt(2 * pi * gamma)        # MMD scaling weight (same as g-and-k)
+
+
+T_end <- 5000
+theta_init <- (p1 + p2) / 2
+xi_0       <- transform_to_xi(theta_init, p1, p2)
+theta_0 <- rep(1, 3)
+
+N_sample <- 5000
+
+N_skeleton <- 100000
+
+```
+
+### m = 5
+
+```{r mg1_skeleton_m5_T50, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+timer_MMD_mg1_m5.start <- Sys.time()
+skeleton_MMD_mg1_m5 <- ZigZag_MMD_RBF_mg1_cpp_arma(T_end, xi_0, theta_0, y, m, p1, p2, gamma, w = w, N_skeleton)
+timer_MMD_mg1_m5.end <- Sys.time()
+
+sample_MMD_mg1_m5 <- skeleton_to_sample_mg1_cpp_arma(skeleton_T = skeleton_MMD_mg1_m5$skeleton_T, skeleton_Xi = skeleton_MMD_mg1_m5$skeleton_Xi, skeleton_Theta = skeleton_MMD_mg1_m5$skeleton_Theta, N = N_sample)
+
+sample_MMD_mg1_m5_theta <- transform_samples_mg1(sample_MMD_mg1_m5, p1, p2)
+
+
+```
+
+```{r mg1_skeleton_m5_T50_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_mg1_m5.end, timer_MMD_mg1_m5.start, units = "mins")
+
+skeleton_MMD_mg1_m5$max_alpha
+skeleton_MMD_mg1_m5$mean_alpha
+
+## Unconstrained trace plots
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, skeleton_MMD_mg1_m5$skeleton_Xi[,1], type = "l", xlab = "T", ylab = "xi_theta_1")
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, skeleton_MMD_mg1_m5$skeleton_Xi[,2], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, skeleton_MMD_mg1_m5$skeleton_Xi[,3], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+## Constrained trace plots
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m5$skeleton_Xi, p1, p2)[,1], type = "l", xlab = "T", ylab = "theta_1")
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m5$skeleton_Xi, p1, p2)[,2], type = "l", xlab = "T", ylab = "theta_2")
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m5$skeleton_Xi, p1, p2)[,3], type = "l", xlab = "T", ylab = "theta_3")
+
+## Density plots
+
+plot(density(sample_MMD_mg1_m5_theta[,1]), ylab = "Density", xlab = paste0("theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000), as.numeric((seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) > p1[1]) & (seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) < p2[1]))/(p2[1] - p1[1]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m5_theta[,2]), ylab = "Density", xlab = paste0("theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000), as.numeric((seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) > p1[2]) & (seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) < p2[2]))/(p2[2] - p1[2]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m5_theta[,3]), ylab = "Density", xlab = paste0("theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000), as.numeric((seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) > p1[3]) & (seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) < p2[3]))/(p2[3] - p1[3]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m5_theta[,1])
+ESS(sample_MMD_mg1_m5_theta[,2])
+ESS(sample_MMD_mg1_m5_theta[,3])
+
+## Unconstrained Density plots
+
+xi_phi_seq <- seq(-5, 5, length.out = 1000)
+
+par(mfrow = c(1, 3))
+
+plot(density(sample_MMD_mg1_m5[,1]), ylab = "Density", xlab = paste0("xi_theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m5[,2]), ylab = "Density", xlab = paste0("xi_theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m5[,3]), ylab = "Density", xlab = paste0("xi_theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m5[,1])
+ESS(sample_MMD_mg1_m5[,2])
+ESS(sample_MMD_mg1_m5[,3])
+```
+
+### m = 10
+
+```{r mg1_skeleton_m10_T50, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 10
+
+timer_MMD_mg1_m10.start <- Sys.time()
+skeleton_MMD_mg1_m10 <- ZigZag_MMD_RBF_mg1_cpp_arma(T_end, xi_0, theta_0, y, m, p1, p2, gamma, w = w, N_skeleton)
+timer_MMD_mg1_m10.end <- Sys.time()
+
+sample_MMD_mg1_m10 <- skeleton_to_sample_mg1_cpp_arma(skeleton_T = skeleton_MMD_mg1_m10$skeleton_T, skeleton_Xi = skeleton_MMD_mg1_m10$skeleton_Xi, skeleton_Theta = skeleton_MMD_mg1_m10$skeleton_Theta, N = N_sample)
+
+sample_MMD_mg1_m10_theta <- transform_samples_mg1(sample_MMD_mg1_m10, p1, p2)
+
+
+```
+
+```{r mg1_skeleton_m10_T50_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_mg1_m10.end, timer_MMD_mg1_m10.start, units = "mins")
+
+skeleton_MMD_mg1_m10$max_alpha
+skeleton_MMD_mg1_m10$mean_alpha
+
+## Unconstrained trace plots
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, skeleton_MMD_mg1_m10$skeleton_Xi[,1], type = "l", xlab = "T", ylab = "xi_theta_1")
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, skeleton_MMD_mg1_m10$skeleton_Xi[,2], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, skeleton_MMD_mg1_m10$skeleton_Xi[,3], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+## Constrained trace plots
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m10$skeleton_Xi, p1, p2)[,1], type = "l", xlab = "T", ylab = "theta_1")
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m10$skeleton_Xi, p1, p2)[,2], type = "l", xlab = "T", ylab = "theta_2")
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m10$skeleton_Xi, p1, p2)[,3], type = "l", xlab = "T", ylab = "theta_3")
+
+## Density plots
+
+plot(density(sample_MMD_mg1_m10_theta[,1]), ylab = "Density", xlab = paste0("theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000), as.numeric((seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) > p1[1]) & (seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) < p2[1]))/(p2[1] - p1[1]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m10_theta[,2]), ylab = "Density", xlab = paste0("theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000), as.numeric((seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) > p1[2]) & (seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) < p2[2]))/(p2[2] - p1[2]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m10_theta[,3]), ylab = "Density", xlab = paste0("theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000), as.numeric((seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) > p1[3]) & (seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) < p2[3]))/(p2[3] - p1[3]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m10_theta[,1])
+ESS(sample_MMD_mg1_m10_theta[,2])
+ESS(sample_MMD_mg1_m10_theta[,3])
+
+## Unconstrained Density plots
+
+xi_phi_seq <- seq(-5, 5, length.out = 1000)
+
+par(mfrow = c(1, 3))
+
+plot(density(sample_MMD_mg1_m10[,1]), ylab = "Density", xlab = paste0("xi_theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m10[,2]), ylab = "Density", xlab = paste0("xi_theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m10[,3]), ylab = "Density", xlab = paste0("xi_theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m10[,1])
+ESS(sample_MMD_mg1_m10[,2])
+ESS(sample_MMD_mg1_m10[,3])
+```
+
+### m = 20
+
+```{r mg1_skeleton_m20_T50, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+timer_MMD_mg1_m20.start <- Sys.time()
+skeleton_MMD_mg1_m20 <- ZigZag_MMD_RBF_mg1_cpp_arma(T_end, xi_0, theta_0, y, m, p1, p2, gamma, w = w, N_skeleton)
+timer_MMD_mg1_m20.end <- Sys.time()
+
+sample_MMD_mg1_m20 <- skeleton_to_sample_mg1_cpp_arma(skeleton_T = skeleton_MMD_mg1_m20$skeleton_T, skeleton_Xi = skeleton_MMD_mg1_m20$skeleton_Xi, skeleton_Theta = skeleton_MMD_mg1_m20$skeleton_Theta, N = N_sample)
+
+sample_MMD_mg1_m20_theta <- transform_samples_mg1(sample_MMD_mg1_m20, p1, p2)
+
+
+```
+
+```{r mg1_skeleton_m20_T50_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_mg1_m20.end, timer_MMD_mg1_m20.start, units = "mins")
+
+skeleton_MMD_mg1_m20$max_alpha
+skeleton_MMD_mg1_m20$mean_alpha
+
+## Unconstrained trace plots
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, skeleton_MMD_mg1_m20$skeleton_Xi[,1], type = "l", xlab = "T", ylab = "xi_theta_1")
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, skeleton_MMD_mg1_m20$skeleton_Xi[,2], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, skeleton_MMD_mg1_m20$skeleton_Xi[,3], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+## Constrained trace plots
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m20$skeleton_Xi, p1, p2)[,1], type = "l", xlab = "T", ylab = "theta_1")
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m20$skeleton_Xi, p1, p2)[,2], type = "l", xlab = "T", ylab = "theta_2")
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m20$skeleton_Xi, p1, p2)[,3], type = "l", xlab = "T", ylab = "theta_3")
+
+## Density plots
+
+plot(density(sample_MMD_mg1_m20_theta[,1]), ylab = "Density", xlab = paste0("theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000), as.numeric((seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) > p1[1]) & (seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) < p2[1]))/(p2[1] - p1[1]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m20_theta[,2]), ylab = "Density", xlab = paste0("theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000), as.numeric((seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) > p1[2]) & (seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) < p2[2]))/(p2[2] - p1[2]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m20_theta[,3]), ylab = "Density", xlab = paste0("theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000), as.numeric((seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) > p1[3]) & (seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) < p2[3]))/(p2[3] - p1[3]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m20_theta[,1])
+ESS(sample_MMD_mg1_m20_theta[,2])
+ESS(sample_MMD_mg1_m20_theta[,3])
+
+## Unconstrained Density plots
+
+xi_phi_seq <- seq(-5, 5, length.out = 1000)
+
+par(mfrow = c(1, 3))
+
+plot(density(sample_MMD_mg1_m20[,1]), ylab = "Density", xlab = paste0("xi_theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m20[,2]), ylab = "Density", xlab = paste0("xi_theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m20[,3]), ylab = "Density", xlab = paste0("xi_theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m20[,1])
+ESS(sample_MMD_mg1_m20[,2])
+ESS(sample_MMD_mg1_m20[,3])
+```
+
+
+### Comparison
+
+
+```{r mg1_T50_comparison, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+m5_df <- as.data.frame(sample_MMD_mg1_m5_theta) |> 
+  mutate(m = rep(5, nrow(sample_MMD_mg1_m5_theta))) |>
+  rename(theta_1 = V1, 
+         theta_2 = V2, 
+         theta_3 = V3)
+
+m5_df <- m5_df |> 
+  bind_cols(as.data.frame(sample_MMD_mg1_m5)) |>
+  rename(xi_theta_1 = V1, 
+         xi_theta_2 = V2, 
+         xi_theta_3 = V3)
+
+m10_df <- as.data.frame(sample_MMD_mg1_m10_theta) |> 
+  mutate(m = rep(10, nrow(sample_MMD_mg1_m10_theta))) |>
+  rename(theta_1 = V1, 
+         theta_2 = V2, 
+         theta_3 = V3)
+
+m10_df <- m10_df |> 
+  bind_cols(as.data.frame(sample_MMD_mg1_m10)) |>
+  rename(xi_theta_1 = V1, 
+         xi_theta_2 = V2, 
+         xi_theta_3 = V3)
+
+m20_df <- as.data.frame(sample_MMD_mg1_m20_theta) |> 
+  mutate(m = rep(20, nrow(sample_MMD_mg1_m20_theta))) |>
+  rename(theta_1 = V1, 
+         theta_2 = V2, 
+         theta_3 = V3)
+
+m20_df <- m20_df |> 
+  bind_cols(as.data.frame(sample_MMD_mg1_m20)) |>
+  rename(xi_theta_1 = V1, 
+         xi_theta_2 = V2, 
+         xi_theta_3 = V3)
+
+
+prior_df <- tibble(theta_1 = seq(p1[1]-0.5, p2[1]+0.5, length.out = 1000),
+                   theta_2 = seq(p1[2]-0.5, p2[2]+0.5, length.out = 1000),
+                   theta_3 = seq(p1[3]-0.05, p2[3]+0.05, length.out = 1000))
+
+prior_df <- prior_df |> mutate(
+  prior_theta_1 = as.numeric((theta_1 > p1[1]) & (theta_1 < p2[1]))/(p2[1] - p1[1]),
+  prior_theta_2 = as.numeric((theta_2 > p1[2]) & (theta_2 < p2[2]))/(p2[2] - p1[2]),
+  prior_theta_3 = as.numeric((theta_3 > p1[3]) & (theta_3 < p2[3]))/(p2[3] - p1[3]),
+)
+
+prior_df <- prior_df |> mutate(
+  xi = seq(-5, 5, length.out = 1000),
+  prior_xi_theta_1 = exp(xi)/((1+exp(xi))^2),
+  prior_xi_theta_2 = exp(xi)/((1+exp(xi))^2),
+  prior_xi_theta_3 = exp(xi)/((1+exp(xi))^2),
+)
+
+```
+
+```{r mg1_T50_comparison2, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+m_comp_df <- bind_rows(m5_df, m10_df, m20_df)
+
+
+
+p_theta_1 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = theta_1, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = theta_1, y = prior_theta_1, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_theta[1]) +
+  ggtitle(paste0("M/G/1 n = ", 50)) +
+  ylab("Density")
+
+p_theta_2 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = theta_2, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = theta_2, y = prior_theta_2, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_theta[2]) +
+  ggtitle(paste0("M/G/1 n = ", 50)) +
+  ylab("Density")
+
+p_theta_3 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = theta_3, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = theta_3, y = prior_theta_3, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_theta[3]) +
+  ggtitle(paste0("M/G/1 n = ", 50)) +
+  ylab("Density")
+
+ggarrange(p_theta_1, p_theta_2, p_theta_3, nrow = 1, ncol = 3, common.legend = TRUE,
+          legend = "bottom")
+
+p_xi_theta_1 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = xi_theta_1, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = xi, y = prior_xi_theta_1, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_xi[1]) +
+  ggtitle(paste0("M/G/1 n = ", 50)) +
+  ylab("Density")
+
+p_xi_theta_2 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = xi_theta_2, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = xi, y = prior_xi_theta_2, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_xi[2]) +
+  ggtitle(paste0("M/G/1 n = ", 50)) +
+  ylab("Density")
+
+p_xi_theta_3 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = xi_theta_3, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = xi, y = prior_xi_theta_3, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_xi[3]) +
+  ggtitle(paste0("M/G/1 n = ", 50)) +
+  ylab("Density")
+
+ggarrange(p_xi_theta_1, p_xi_theta_2, p_xi_theta_3, nrow = 1, ncol = 3, common.legend = TRUE,
+          legend = "bottom")
+
+```
+
+
+## Data - T - 200
+
+```{r data_gen_T200, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+set.seed(123)
+true_theta <- c(1, 5, 0.2)
+n_obs      <- 200
+
+y <- simulate_mg1_R(true_theta, n_obs)
+
+plot(y, type = "l")
+
+```
+
+### Prior
+
+```{r prior_T200, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+min_y <- 1+min(y)
+p1 <- c(0,      min_y,       0  )
+p2 <- c(min_y,  10 + min_y,  0.5)
+
+cat("Prior bounds:\n")
+for (j in 1:3)
+  cat(sprintf("  theta%d ~ Uniform(%6.4f, %6.4f)\n", j, p1[j], p2[j]))
+cat("\n")
+
+true_xi <- transform_to_xi(true_theta, p1, p2)
+
+
+
+```
+
+
+## PDMP 
+
+### set-up 
+
+```{r setup_T200, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+gamma   <- median_heuristic(matrix(y, ncol = 1))
+w <- sqrt(2 * pi * gamma)        # MMD scaling weight (same as g-and-k)
+
+
+T_end <- 2500
+theta_init <- (p1 + p2) / 2
+xi_0       <- transform_to_xi(theta_init, p1, p2)
+theta_0 <- rep(1, 3)
+
+N_sample <- 5000
+
+N_skeleton <- 100000
+
+
+```
+
+### m = 5
+
+```{r mg1_skeleton_m5_T200, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 5
+
+timer_MMD_mg1_m5.start <- Sys.time()
+skeleton_MMD_mg1_m5 <- ZigZag_MMD_RBF_mg1_cpp_arma(T_end, xi_0, theta_0, y, m, p1, p2, gamma, w = w, N_skeleton)
+timer_MMD_mg1_m5.end <- Sys.time()
+
+sample_MMD_mg1_m5 <- skeleton_to_sample_mg1_cpp_arma(skeleton_T = skeleton_MMD_mg1_m5$skeleton_T, skeleton_Xi = skeleton_MMD_mg1_m5$skeleton_Xi, skeleton_Theta = skeleton_MMD_mg1_m5$skeleton_Theta, N = N_sample)
+
+sample_MMD_mg1_m5_theta <- transform_samples_mg1(sample_MMD_mg1_m5, p1, p2)
+
+
+
+```
+
+```{r mg1_skeleton_m5_T200_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_mg1_m5.end, timer_MMD_mg1_m5.start, units = "mins")
+
+skeleton_MMD_mg1_m5$max_alpha
+skeleton_MMD_mg1_m5$mean_alpha
+
+## Unconstrained trace plots
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, skeleton_MMD_mg1_m5$skeleton_Xi[,1], type = "l", xlab = "T", ylab = "xi_theta_1")
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, skeleton_MMD_mg1_m5$skeleton_Xi[,2], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, skeleton_MMD_mg1_m5$skeleton_Xi[,3], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+## Constrained trace plots
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m5$skeleton_Xi, p1, p2)[,1], type = "l", xlab = "T", ylab = "theta_1")
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m5$skeleton_Xi, p1, p2)[,2], type = "l", xlab = "T", ylab = "theta_2")
+
+plot(skeleton_MMD_mg1_m5$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m5$skeleton_Xi, p1, p2)[,3], type = "l", xlab = "T", ylab = "theta_3")
+
+## Density plots
+
+plot(density(sample_MMD_mg1_m5_theta[,1]), ylab = "Density", xlab = paste0("theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000), as.numeric((seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) > p1[1]) & (seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) < p2[1]))/(p2[1] - p1[1]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m5_theta[,2]), ylab = "Density", xlab = paste0("theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000), as.numeric((seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) > p1[2]) & (seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) < p2[2]))/(p2[2] - p1[2]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m5_theta[,3]), ylab = "Density", xlab = paste0("theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000), as.numeric((seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) > p1[3]) & (seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) < p2[3]))/(p2[3] - p1[3]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m5_theta[,1])
+ESS(sample_MMD_mg1_m5_theta[,2])
+ESS(sample_MMD_mg1_m5_theta[,3])
+
+## Unconstrained Density plots
+
+xi_phi_seq <- seq(-5, 5, length.out = 1000)
+
+par(mfrow = c(1, 3))
+
+plot(density(sample_MMD_mg1_m5[,1]), ylab = "Density", xlab = paste0("xi_theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m5[,2]), ylab = "Density", xlab = paste0("xi_theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m5[,3]), ylab = "Density", xlab = paste0("xi_theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m5[,1])
+ESS(sample_MMD_mg1_m5[,2])
+ESS(sample_MMD_mg1_m5[,3])
+```
+
+### m = 10
+
+```{r mg1_skeleton_m10_T200, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 10
+
+timer_MMD_mg1_m10.start <- Sys.time()
+skeleton_MMD_mg1_m10 <- ZigZag_MMD_RBF_mg1_cpp_arma(T_end, xi_0, theta_0, y, m, p1, p2, gamma, w = w, N_skeleton)
+timer_MMD_mg1_m10.end <- Sys.time()
+
+sample_MMD_mg1_m10 <- skeleton_to_sample_mg1_cpp_arma(skeleton_T = skeleton_MMD_mg1_m10$skeleton_T, skeleton_Xi = skeleton_MMD_mg1_m10$skeleton_Xi, skeleton_Theta = skeleton_MMD_mg1_m10$skeleton_Theta, N = N_sample)
+
+sample_MMD_mg1_m10_theta <- transform_samples_mg1(sample_MMD_mg1_m10, p1, p2)
+
+
+
+```
+
+```{r mg1_skeleton_m10_T200_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_mg1_m10.end, timer_MMD_mg1_m10.start, units = "mins")
+
+skeleton_MMD_mg1_m10$max_alpha
+skeleton_MMD_mg1_m10$mean_alpha
+
+## Unconstrained trace plots
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, skeleton_MMD_mg1_m10$skeleton_Xi[,1], type = "l", xlab = "T", ylab = "xi_theta_1")
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, skeleton_MMD_mg1_m10$skeleton_Xi[,2], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, skeleton_MMD_mg1_m10$skeleton_Xi[,3], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+## Constrained trace plots
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m10$skeleton_Xi, p1, p2)[,1], type = "l", xlab = "T", ylab = "theta_1")
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m10$skeleton_Xi, p1, p2)[,2], type = "l", xlab = "T", ylab = "theta_2")
+
+plot(skeleton_MMD_mg1_m10$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m10$skeleton_Xi, p1, p2)[,3], type = "l", xlab = "T", ylab = "theta_3")
+
+## Density plots
+
+plot(density(sample_MMD_mg1_m10_theta[,1]), ylab = "Density", xlab = paste0("theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000), as.numeric((seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) > p1[1]) & (seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) < p2[1]))/(p2[1] - p1[1]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m10_theta[,2]), ylab = "Density", xlab = paste0("theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000), as.numeric((seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) > p1[2]) & (seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) < p2[2]))/(p2[2] - p1[2]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m10_theta[,3]), ylab = "Density", xlab = paste0("theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000), as.numeric((seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) > p1[3]) & (seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) < p2[3]))/(p2[3] - p1[3]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m10_theta[,1])
+ESS(sample_MMD_mg1_m10_theta[,2])
+ESS(sample_MMD_mg1_m10_theta[,3])
+
+## Unconstrained Density plots
+
+xi_phi_seq <- seq(-5, 5, length.out = 1000)
+
+par(mfrow = c(1, 3))
+
+plot(density(sample_MMD_mg1_m10[,1]), ylab = "Density", xlab = paste0("xi_theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m10[,2]), ylab = "Density", xlab = paste0("xi_theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m10[,3]), ylab = "Density", xlab = paste0("xi_theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m10[,1])
+ESS(sample_MMD_mg1_m10[,2])
+ESS(sample_MMD_mg1_m10[,3])
+```
+
+### m = 20
+
+```{r mg1_skeleton_m20_T200, include=TRUE, echo=TRUE, eval=TRUE, cache=TRUE}
+
+m <- 20
+
+timer_MMD_mg1_m20.start <- Sys.time()
+skeleton_MMD_mg1_m20 <- ZigZag_MMD_RBF_mg1_cpp_arma(T_end, xi_0, theta_0, y, m, p1, p2, gamma, w = w, N_skeleton)
+timer_MMD_mg1_m20.end <- Sys.time()
+
+sample_MMD_mg1_m20 <- skeleton_to_sample_mg1_cpp_arma(skeleton_T = skeleton_MMD_mg1_m20$skeleton_T, skeleton_Xi = skeleton_MMD_mg1_m20$skeleton_Xi, skeleton_Theta = skeleton_MMD_mg1_m20$skeleton_Theta, N = N_sample)
+
+sample_MMD_mg1_m20_theta <- transform_samples_mg1(sample_MMD_mg1_m20, p1, p2)
+
+
+
+```
+
+```{r mg1_skeleton_m20_T200_diag, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+difftime(timer_MMD_mg1_m20.end, timer_MMD_mg1_m20.start, units = "mins")
+
+skeleton_MMD_mg1_m20$max_alpha
+skeleton_MMD_mg1_m20$mean_alpha
+
+## Unconstrained trace plots
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, skeleton_MMD_mg1_m20$skeleton_Xi[,1], type = "l", xlab = "T", ylab = "xi_theta_1")
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, skeleton_MMD_mg1_m20$skeleton_Xi[,2], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, skeleton_MMD_mg1_m20$skeleton_Xi[,3], type = "l", xlab = "T", ylab = "xi_theta_2")
+
+## Constrained trace plots
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m20$skeleton_Xi, p1, p2)[,1], type = "l", xlab = "T", ylab = "theta_1")
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m20$skeleton_Xi, p1, p2)[,2], type = "l", xlab = "T", ylab = "theta_2")
+
+plot(skeleton_MMD_mg1_m20$skeleton_T, transform_samples_mg1(skeleton_MMD_mg1_m20$skeleton_Xi, p1, p2)[,3], type = "l", xlab = "T", ylab = "theta_3")
+
+## Density plots
+
+plot(density(sample_MMD_mg1_m20_theta[,1]), ylab = "Density", xlab = paste0("theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000), as.numeric((seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) > p1[1]) & (seq(p1[1] - 0.5, p2[1]+0.5, length.out = 1000) < p2[1]))/(p2[1] - p1[1]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m20_theta[,2]), ylab = "Density", xlab = paste0("theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000), as.numeric((seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) > p1[2]) & (seq(p1[2] - 0.5, p2[2]+0.5, length.out = 1000) < p2[2]))/(p2[2] - p1[2]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m20_theta[,3]), ylab = "Density", xlab = paste0("theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000), as.numeric((seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) > p1[3]) & (seq(p1[3] - 0.5, p2[3]+0.5, length.out = 1000) < p2[3]))/(p2[3] - p1[3]), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_theta[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m20_theta[,1])
+ESS(sample_MMD_mg1_m20_theta[,2])
+ESS(sample_MMD_mg1_m20_theta[,3])
+
+## Unconstrained Density plots
+
+xi_phi_seq <- seq(-5, 5, length.out = 1000)
+
+par(mfrow = c(1, 3))
+
+plot(density(sample_MMD_mg1_m20[,1]), ylab = "Density", xlab = paste0("xi_theta_1"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[1], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m20[,2]), ylab = "Density", xlab = paste0("xi_theta_2"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[2], lwd = 3, lty = 2, col = "red")
+
+plot(density(sample_MMD_mg1_m20[,3]), ylab = "Density", xlab = paste0("xi_theta_3"), lwd = 3, main = paste("Stochastic Volatility"))
+points(xi_phi_seq, exp(xi_phi_seq)/((1+exp(xi_phi_seq))^2), col = "grey", lty = 2, lwd = 3, type = "l")
+abline(v = true_xi[3], lwd = 3, lty = 2, col = "red")
+
+ESS(sample_MMD_mg1_m20[,1])
+ESS(sample_MMD_mg1_m20[,2])
+ESS(sample_MMD_mg1_m20[,3])
+```
+
+
+### Comparison
+
+
+```{r mg1_T200_comparison, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+m5_df <- as.data.frame(sample_MMD_mg1_m5_theta) |> 
+  mutate(m = rep(5, nrow(sample_MMD_mg1_m5_theta))) |>
+  rename(theta_1 = V1, 
+         theta_2 = V2, 
+         theta_3 = V3)
+
+m5_df <- m5_df |> 
+  bind_cols(as.data.frame(sample_MMD_mg1_m5)) |>
+  rename(xi_theta_1 = V1, 
+         xi_theta_2 = V2, 
+         xi_theta_3 = V3)
+
+m10_df <- as.data.frame(sample_MMD_mg1_m10_theta) |> 
+  mutate(m = rep(10, nrow(sample_MMD_mg1_m10_theta))) |>
+  rename(theta_1 = V1, 
+         theta_2 = V2, 
+         theta_3 = V3)
+
+m10_df <- m10_df |> 
+  bind_cols(as.data.frame(sample_MMD_mg1_m10)) |>
+  rename(xi_theta_1 = V1, 
+         xi_theta_2 = V2, 
+         xi_theta_3 = V3)
+
+m20_df <- as.data.frame(sample_MMD_mg1_m20_theta) |> 
+  mutate(m = rep(20, nrow(sample_MMD_mg1_m20_theta))) |>
+  rename(theta_1 = V1, 
+         theta_2 = V2, 
+         theta_3 = V3)
+
+m20_df <- m20_df |> 
+  bind_cols(as.data.frame(sample_MMD_mg1_m20)) |>
+  rename(xi_theta_1 = V1, 
+         xi_theta_2 = V2, 
+         xi_theta_3 = V3)
+
+prior_df <- tibble(theta_1 = seq(p1[1]-0.5, p2[1]+0.5, length.out = 1000),
+                   theta_2 = seq(p1[2]-0.5, p2[2]+0.5, length.out = 1000),
+                   theta_3 = seq(p1[3]-0.05, p2[3]+0.05, length.out = 1000))
+
+prior_df <- prior_df |> mutate(
+  prior_theta_1 = as.numeric((theta_1 > p1[1]) & (theta_1 < p2[1]))/(p2[1] - p1[1]),
+  prior_theta_2 = as.numeric((theta_2 > p1[2]) & (theta_2 < p2[2]))/(p2[2] - p1[2]),
+  prior_theta_3 = as.numeric((theta_3 > p1[3]) & (theta_3 < p2[3]))/(p2[3] - p1[3]),
+)
+
+prior_df <- prior_df |> mutate(
+  xi = seq(-5, 5, length.out = 1000),
+  prior_xi_theta_1 = exp(xi)/((1+exp(xi))^2),
+  prior_xi_theta_2 = exp(xi)/((1+exp(xi))^2),
+  prior_xi_theta_3 = exp(xi)/((1+exp(xi))^2),
+)
+
+```
+
+```{r mg1_T200_comparison2, include=TRUE, echo=TRUE, eval=TRUE, cache=FALSE}
+
+m_comp_df <- bind_rows(m5_df, m10_df, m20_df)
+
+
+
+p_theta_1 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = theta_1, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = theta_1, y = prior_theta_1, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_theta[1]) +
+  ggtitle(paste0("M/G/1 n = ", 200)) +
+  ylab("Density")
+
+p_theta_2 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = theta_2, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = theta_2, y = prior_theta_2, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_theta[2]) +
+  ggtitle(paste0("M/G/1 n = ", 200)) +
+  ylab("Density")
+
+p_theta_3 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = theta_3, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = theta_3, y = prior_theta_3, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_theta[3]) +
+  ggtitle(paste0("M/G/1 n = ", 200)) +
+  ylab("Density")
+
+ggarrange(p_theta_1, p_theta_2, p_theta_3, nrow = 1, ncol = 3, common.legend = TRUE,
+          legend = "bottom")
+
+p_xi_theta_1 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = xi_theta_1, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = xi, y = prior_xi_theta_1, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_xi[1]) +
+  ggtitle(paste0("M/G/1 n = ", 200)) +
+  ylab("Density")
+
+p_xi_theta_2 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = xi_theta_2, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = xi, y = prior_xi_theta_2, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_xi[2]) +
+  ggtitle(paste0("M/G/1 n = ", 200)) +
+  ylab("Density")
+
+p_xi_theta_3 <- m_comp_df |>
+  mutate(m = as.factor(m)) |>
+  ggplot(aes(x = xi_theta_3, color = m)) +
+  geom_density(linewidth = 1.1) +
+  geom_line(data = prior_df, aes(x = xi, y = prior_xi_theta_3, color = "Prior"), color = "grey", linewidth = 1.1) +
+  geom_vline(xintercept = true_xi[3]) +
+  ggtitle(paste0("M/G/1 n = ", 200)) +
+  ylab("Density")
+
+ggarrange(p_xi_theta_1, p_xi_theta_2, p_xi_theta_3, nrow = 1, ncol = 3, common.legend = TRUE,
+          legend = "bottom")
+
+```
+
+
+
